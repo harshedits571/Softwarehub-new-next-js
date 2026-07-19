@@ -236,6 +236,7 @@ export default function Dashboard() {
         resourceTitle: title,
         versionName: versionName,
         timestamp: Timestamp.now(),
+        ownerUid: selectedItem?.ownerUid || (selectedItem as any)?.vendorId || "platform",
       };
 
       await addDoc(collection(firestore, "downloadLogs"), logData);

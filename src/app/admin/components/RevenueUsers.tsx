@@ -81,8 +81,8 @@ export default function RevenueUsers() {
   const [statusFilter, setStatusFilter] = useState<"all" | "pro" | "banned" | "download">("all");
 
   // Sorting
-  const [sortKey, setSortKey] = useState<"name" | "joined" | "status" | "lastDownload">("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<"name" | "joined" | "status" | "lastDownload">("lastDownload");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -551,20 +551,20 @@ export default function RevenueUsers() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/5 text-gray-400 text-[10px] uppercase font-bold tracking-wider">
-                <th className="pb-3 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("name")}>
+                <th className="pb-3 px-6 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("name")}>
                   User Details {sortKey === "name" && (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="pb-3 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("status")}>
+                <th className="pb-3 px-6 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("status")}>
                   Plan / Status {sortKey === "status" && (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="pb-3">Purchased</th>
-                <th className="pb-3 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("joined")}>
+                <th className="pb-3 px-6">Purchased</th>
+                <th className="pb-3 px-6 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("joined")}>
                   Joined {sortKey === "joined" && (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="pb-3 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("lastDownload")}>
+                <th className="pb-3 px-6 cursor-pointer hover:text-indigo-400" onClick={() => handleSort("lastDownload")}>
                   Last Download {sortKey === "lastDownload" && (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="pb-3 text-right">Actions</th>
+                <th className="pb-3 px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-xs">
@@ -575,7 +575,7 @@ export default function RevenueUsers() {
                     onClick={() => handleOpenDetails(user)}
                     className="hover:bg-white/2 cursor-pointer transition-colors group"
                   >
-                    <td className="py-4">
+                    <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold">
                           {(user.userName || user.name || user.email || "?")[0].toUpperCase()}
@@ -588,7 +588,7 @@ export default function RevenueUsers() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-4">
+                    <td className="py-4 px-6">
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span
                           className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase ${
@@ -610,13 +610,13 @@ export default function RevenueUsers() {
                         )}
                       </div>
                     </td>
-                    <td className="py-4 text-gray-400">
+                    <td className="py-4 px-6 text-gray-400">
                       {user.purchased ? `${Object.keys(user.purchased).length} Items` : "None"}
                     </td>
-                    <td className="py-4 font-mono text-gray-500 text-[10px]">
+                    <td className="py-4 px-6 font-mono text-gray-500 text-[10px]">
                       {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
                     </td>
-                    <td className="py-4">
+                    <td className="py-4 px-6">
                       {user.lastDownload ? (
                         <div className="space-y-0.5">
                           <p className="font-bold text-white text-[10px] truncate max-w-[150px]">
@@ -630,7 +630,7 @@ export default function RevenueUsers() {
                         <span className="text-gray-600 italic text-[10px]">No activity</span>
                       )}
                     </td>
-                    <td className="py-4 text-right">
+                    <td className="py-4 px-6 text-right">
                       <div className="flex gap-1.5 justify-end items-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {

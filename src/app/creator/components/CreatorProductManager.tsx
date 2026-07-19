@@ -39,6 +39,7 @@ interface ProductItem {
   features?: Feature[];
   ownerUid?: string;
   vendorId?: string;
+  creatorId?: string;
   Category?: string;
   status?: "approved" | "pending" | "rejected" | "change-requested";
   sortOrder?: number;
@@ -337,6 +338,7 @@ export default function CreatorProductManager({ currentUser }: CreatorProductMan
       features: features.filter((f) => f.title || f.description || f.imageUrl),
       ownerUid: currentUser.uid,
       vendorId: currentUser.uid,
+      creatorId: currentUser.uid,
       // For creators, products always upload as "pending" approval!
       status: editingId ? "pending" : "pending",
       sortOrder: editingId ? items.find(i => i.id === editingId)?.sortOrder || 0 : items.length,

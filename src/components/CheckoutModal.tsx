@@ -165,6 +165,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               amount: amount,
               currency: currency,
               itemId: itemId || "PRO_BUNDLE",
+              productId: itemId || "PRO_BUNDLE",
               itemTitle: itemTitle || "Lifetime Pro Access",
               paymentId: paymentId,
               type: itemId ? "individual" : "pro_membership",

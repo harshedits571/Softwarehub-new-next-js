@@ -256,7 +256,7 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
   const handleDownload = async (version: any = null) => {
     if (!currentUser) {
       showToast("Sign in required to download packages", "info");
-      router.push("/auth");
+      router.push(`/auth?redirect=/products/${product.id}`);
       return;
     }
 
@@ -264,63 +264,23 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
     const versionName = targetVariant?.Name || "Latest";
     const rawLink = targetVariant?.Link || product.DownloadLink || "#";
 
+    // Helper: open download link + log to downloadLogs
     const executeDownloadLink = async () => {
       const win = window.open(rawLink, "_blank");
       if (win) win.focus();
 
       // Log download details
-      const logData = {
+      await addDoc(collection(firestore, "downloadLogs"), {
         uid: currentUser.uid,
         email: currentUser.email || "Anonymous",
         resourceId: product.id,
         resourceTitle: product.Title,
         versionName: versionName,
         timestamp: Timestamp.now(),
-      };
-
-      await addDoc(collection(firestore, "downloadLogs"), logData);
+        ownerUid: product.ownerUid || product.vendorId || "platform",
+      });
 
       const userDocRef = doc(firestore, "users", currentUser.uid);
-      
-      const hasPurchased = userProfile?.purchased?.[product.id];
-      const hasFreeDownloaded = userProfile?.freeDownloads?.[product.id];
-      
-      // Log a 0 amount order if this is their first time getting this product
-      // (This populates the creator CRM and Sales Ledger for free products)
-      if (!hasPurchased && !hasFreeDownloaded) {
-        try {
-          const transactionRef = collection(firestore, "transactions");
-          await addDoc(transactionRef, {
-            uid: currentUser.uid,
-            email: currentUser.email || "N/A",
-            userName: currentUser.displayName || "N/A",
-            amount: 0,
-            currency: pricing.currency,
-            itemId: product.id,
-            itemTitle: product.Title,
-            paymentId: "FREE_ORDER_" + Math.random().toString(36).substr(2, 9),
-            type: "individual",
-            vendorId: product.vendorId || product.ownerUid || "platform",
-            payoutAccountId: "",
-            platformCommission: 0,
-            creatorPayout: 0,
-            timestamp: Timestamp.now(),
-          });
-          
-          await updateDoc(userDocRef, {
-             [`freeDownloads.${product.id}`]: Timestamp.now(),
-             lastDownload: {
-               resourceTitle: product.Title,
-               versionName: versionName,
-               timestamp: Timestamp.now(),
-             }
-          });
-          return; // Early return to avoid duplicate updateDoc
-        } catch (err) {
-          console.error("Failed to log free transaction", err);
-        }
-      }
-
       await updateDoc(userDocRef, {
         lastDownload: {
           resourceTitle: product.Title,
@@ -330,12 +290,46 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
       });
     };
 
+    // Helper: create a ₹0 transaction for free product acquisitions 
+    // so it shows up in Creator Sales & Admin CRM
+    const logFreeOrder = async () => {
+      try {
+        await addDoc(collection(firestore, "transactions"), {
+          uid: currentUser.uid,
+          email: currentUser.email || "N/A",
+          userName: currentUser.displayName || "N/A",
+          amount: 0,
+          currency: "INR",
+          itemId: product.id,
+          productId: product.id,
+          itemTitle: product.Title,
+          paymentId: "FREE_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+          type: "individual",
+          vendorId: product.vendorId || product.ownerUid || "platform",
+          payoutAccountId: "",
+          platformCommission: 0,
+          creatorPayout: 0,
+          timestamp: Timestamp.now(),
+        });
+
+        // Mark as free-downloaded so we don't double-log
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+          [`freeDownloads.${product.id}`]: Timestamp.now(),
+        });
+      } catch (err: any) {
+        console.error("Failed to log free order:", err);
+      }
+    };
+
     const isAdmin = userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
     const isPaid = userProfile?.isPaid || isAdmin;
+    const alreadyPurchased = !!userProfile?.purchased?.[product.id];
+    const alreadyFreeDownloaded = !!userProfile?.freeDownloads?.[product.id];
 
+    // PAID PRODUCT: send to checkout if not purchased yet
     if (activePrice > 0) {
-      const hasPurchased = userProfile?.purchased?.[product.id];
-      if (!hasPurchased && !isAdmin) {
+      if (!alreadyPurchased && !isAdmin) {
         setCheckoutItem({
           id: product.id,
           title: product.Title,
@@ -344,23 +338,38 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
         setIsCheckoutOpen(true);
         return;
       }
+      // Already purchased or admin — just download
+      await executeDownloadLink();
+      return;
     }
 
+    // FREE PRODUCT (activePrice === 0):
+    // Log a ₹0 order if never logged before (for creator CRM + payouts)
+    try {
+      const q = query(
+        collection(firestore, "transactions"),
+        where("uid", "==", currentUser.uid),
+        where("productId", "==", product.id)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        await logFreeOrder();
+      }
+    } catch (err) {
+      console.error("Failed to check existing free transaction:", err);
+    }
+
+    // Admins/paid users skip the free-download limit
     if (isAdmin || isPaid) {
       await executeDownloadLink();
       return;
     }
 
-    // Free downloads limits check
+    // Free download limit check for regular users
     const freeDownloads = userProfile?.freeDownloads || {};
     const downloadCount = Object.keys(freeDownloads).length;
 
-    if (freeDownloads[product.id]) {
-      await executeDownloadLink();
-      return;
-    }
-
-    if (downloadCount < 2) {
+    if (downloadCount <= 2) {
       await executeDownloadLink();
     } else {
       setIsLimitModalOpen(true);

@@ -17,8 +17,10 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
     salesCount: 0,
     revenueINR: 0,
     revenueUSD: 0,
+    downloadsCount: 0,
   });
   const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [recentDownloads, setRecentDownloads] = useState<any[]>([]);
   const [recentReviews, setRecentReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,6 +111,36 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
         const sortedReviews = reviewsList.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
         setRecentReviews(sortedReviews);
 
+        // 4. Fetch Download Logs
+        const dlsQ = query(
+          collection(firestore, "downloadLogs"),
+          where("ownerUid", "==", currentUser.uid)
+        );
+        const dlsSnap = await getDocs(dlsQ);
+        let downloadsCount = 0;
+        const dlsList: any[] = [];
+        
+        dlsSnap.forEach((docSnap) => {
+          const dl = docSnap.data();
+          downloadsCount++;
+          
+          let ts = dl.timestamp;
+          if (ts && typeof ts.toMillis === "function") ts = ts.toMillis();
+          else if (ts && typeof ts === "object" && ts.seconds) ts = ts.seconds * 1000;
+          else ts = Number(ts) || Date.now();
+
+          dlsList.push({
+            id: docSnap.id,
+            itemTitle: dl.resourceTitle || "Untitled Asset",
+            versionName: dl.versionName || "Latest",
+            timestamp: ts,
+            email: dl.email || "Anonymous",
+          });
+        });
+
+        const sortedDownloads = dlsList.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
+        setRecentDownloads(sortedDownloads);
+
         setStats({
           approved,
           pending,
@@ -116,6 +148,7 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
           salesCount,
           revenueINR,
           revenueUSD,
+          downloadsCount,
         });
       } catch (err) {
         console.error("Error loading overview stats:", err);
@@ -139,7 +172,7 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
   return (
     <div className="space-y-8 animate-fade-in text-white">
       {/* Vital stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="glass-card p-5 rounded-2xl flex flex-col justify-between h-36">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[10px] font-bold uppercase tracking-wider">Active Assets</span>
@@ -175,6 +208,17 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
 
         <div className="glass-card p-5 rounded-2xl flex flex-col justify-between h-36">
           <div className="flex justify-between items-center text-gray-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Total Downloads</span>
+            <span>⬇️</span>
+          </div>
+          <div>
+            <h4 className="text-2xl font-black text-cyan-400">{stats.downloadsCount}</h4>
+            <p className="text-[10px] text-gray-500 mt-1">Product Acquisitions</p>
+          </div>
+        </div>
+
+        <div className="glass-card p-5 rounded-2xl flex flex-col justify-between h-36">
+          <div className="flex justify-between items-center text-gray-400">
             <span className="text-[10px] font-bold uppercase tracking-wider">Gross Earnings</span>
             <span>💰</span>
           </div>
@@ -186,7 +230,7 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Recent Activity */}
         <div className="glass-card p-6 rounded-3xl space-y-4">
           <h3 className="text-sm font-bold text-gray-300">🕒 Recent Storefront Orders</h3>
@@ -205,6 +249,25 @@ export default function CreatorOverview({ currentUser, setActiveTab }: CreatorOv
               ))
             ) : (
               <p className="text-xs text-gray-500 py-10 text-center">No orders registered yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Downloads */}
+        <div className="glass-card p-6 rounded-3xl space-y-4">
+          <h3 className="text-sm font-bold text-gray-300">⬇️ Recent Storefront Downloads</h3>
+          <div className="divide-y divide-white/5">
+            {recentDownloads.length > 0 ? (
+              recentDownloads.map((dl) => (
+                <div key={dl.id} className="py-3 flex justify-between items-center group">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors truncate">{dl.itemTitle}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{dl.email} • {dl.versionName} • {new Date(dl.timestamp).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-gray-500 py-10 text-center">No downloads registered yet.</p>
             )}
           </div>
         </div>

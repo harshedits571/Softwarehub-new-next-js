@@ -185,6 +185,7 @@ export default function CreatorStorefront() {
         resourceTitle: title,
         versionName: versionName,
         timestamp: Timestamp.now(),
+        ownerUid: selectedItem?.ownerUid || selectedItem?.vendorId || "platform",
       };
 
       await addDoc(collection(firestore, "downloadLogs"), logData);

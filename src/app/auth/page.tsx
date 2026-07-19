@@ -54,7 +54,11 @@ export default function AuthPage() {
         });
       }
 
-      router.push("/");
+      // Determine redirect URL
+      const params = new URLSearchParams(window.location.search);
+      const redirectTo = params.get("redirect") || "/";
+
+      router.push(redirectTo);
     } catch (err: any) {
       console.error("Google Auth error:", err);
       setError(err.message || "Failed to sign in. Please try again.");

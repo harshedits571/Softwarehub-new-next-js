@@ -54,6 +54,7 @@ interface ProductItem {
   Versions?: Version[];
   ownerUid?: string;
   vendorId?: string;
+  creatorId?: string;
 }
 
 const CATEGORY_NAMES: Record<string, string> = {
@@ -300,6 +301,7 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
         if (currentUser) {
           cleanData.ownerUid = currentUser.uid;
           cleanData.vendorId = currentUser.uid;
+          cleanData.creatorId = currentUser.uid;
         }
         await addDoc(collection(firestore, "products"), cleanData);
         await logActivity("Added Item", targetCollection, title);
