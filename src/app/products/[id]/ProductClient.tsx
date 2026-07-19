@@ -281,6 +281,46 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
       await addDoc(collection(firestore, "downloadLogs"), logData);
 
       const userDocRef = doc(firestore, "users", currentUser.uid);
+      
+      const hasPurchased = userProfile?.purchased?.[product.id];
+      const hasFreeDownloaded = userProfile?.freeDownloads?.[product.id];
+      
+      // Log a 0 amount order if this is their first time getting this product
+      // (This populates the creator CRM and Sales Ledger for free products)
+      if (!hasPurchased && !hasFreeDownloaded) {
+        try {
+          const transactionRef = collection(firestore, "transactions");
+          await addDoc(transactionRef, {
+            uid: currentUser.uid,
+            email: currentUser.email || "N/A",
+            userName: currentUser.displayName || "N/A",
+            amount: 0,
+            currency: pricing.currency,
+            itemId: product.id,
+            itemTitle: product.Title,
+            paymentId: "FREE_ORDER_" + Math.random().toString(36).substr(2, 9),
+            type: "individual",
+            vendorId: product.vendorId || product.ownerUid || "platform",
+            payoutAccountId: "",
+            platformCommission: 0,
+            creatorPayout: 0,
+            timestamp: Timestamp.now(),
+          });
+          
+          await updateDoc(userDocRef, {
+             [`freeDownloads.${product.id}`]: Timestamp.now(),
+             lastDownload: {
+               resourceTitle: product.Title,
+               versionName: versionName,
+               timestamp: Timestamp.now(),
+             }
+          });
+          return; // Early return to avoid duplicate updateDoc
+        } catch (err) {
+          console.error("Failed to log free transaction", err);
+        }
+      }
+
       await updateDoc(userDocRef, {
         lastDownload: {
           resourceTitle: product.Title,
@@ -321,10 +361,6 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
     }
 
     if (downloadCount < 2) {
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, {
-        [`freeDownloads.${product.id}`]: Timestamp.now()
-      });
       await executeDownloadLink();
     } else {
       setIsLimitModalOpen(true);
