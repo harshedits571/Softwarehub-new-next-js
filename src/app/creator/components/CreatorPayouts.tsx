@@ -29,8 +29,7 @@ export default function CreatorPayouts({ currentUser }: CreatorPayoutsProps) {
       try {
         const q = query(
           collection(firestore, "transactions"),
-          where("vendorId", "==", currentUser.uid),
-          orderBy("timestamp", "desc")
+          where("vendorId", "==", currentUser.uid)
         );
         const snap = await getDocs(q);
         const list: Transaction[] = [];
@@ -52,6 +51,9 @@ export default function CreatorPayouts({ currentUser }: CreatorPayoutsProps) {
             userName: val.userName || val.name || "Customer",
           });
         });
+        
+        // Sort in memory by timestamp descending
+        list.sort((a, b) => b.timestamp - a.timestamp);
         setSales(list);
       } catch (err) {
         console.error("Error loading creator sales ledger:", err);
