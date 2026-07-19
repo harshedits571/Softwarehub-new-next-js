@@ -1,0 +1,9 @@
+{
+  "users": {
+    "JnIxi74sJRTT8lzP58iHGIQuMWS2": {
+      "role": "admin",
+      "isAdmin": true,
+      "email": "your-email@example.com"
+    }
+  }
+}
