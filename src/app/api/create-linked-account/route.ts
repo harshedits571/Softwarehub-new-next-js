@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!keyId || !keySecret) {
+      return NextResponse.json(
+        { error: "Razorpay environment variables are not configured on the server." },
+        { status: 500 }
+      );
+    }
+
     const razorpay = new Razorpay({
-      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY || "",
-      key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+      key_id: keyId,
+      key_secret: keySecret,
     });
 
     const body = await req.json();
