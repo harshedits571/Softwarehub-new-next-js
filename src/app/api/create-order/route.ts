@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
 
-const razorpay = new Razorpay({
-  key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
-
 export async function POST(req: NextRequest) {
   try {
+    // Initialize inside the handler to prevent Vercel build crashes if env vars are missing during build
+    const razorpay = new Razorpay({
+      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY || "",
+      key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+    });
+
     const body = await req.json();
     const {
       amount,
