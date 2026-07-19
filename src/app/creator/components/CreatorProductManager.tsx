@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { collection, query, where, getDocs, doc, setDoc, addDoc, deleteDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, addDoc, deleteDoc, query, where, Timestamp, onSnapshot } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { firestore, storage } from "../../../utils/firebase";
 
@@ -95,15 +95,19 @@ export default function CreatorProductManager({ currentUser }: CreatorProductMan
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
-
-  const loadItems = async () => {
+  // Load products for this creator using onSnapshot for real-time updates
+  useEffect(() => {
+    if (!currentUser) return;
     setLoading(true);
-    try {
-      const q = query(
-        collection(firestore, "products"),
-        where("ownerUid", "==", currentUser.uid)
-      );
-      const snap = await getDocs(q);
+    let isMounted = true;
+
+    const q = query(
+      collection(firestore, "products"),
+      where("ownerUid", "==", currentUser.uid)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      if (!isMounted) return;
       const list: ProductItem[] = [];
       snap.forEach((docSnap) => {
         list.push({
@@ -113,16 +117,17 @@ export default function CreatorProductManager({ currentUser }: CreatorProductMan
       });
       list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       setItems(list);
-    } catch (err) {
-      console.error("Error loading creator products:", err);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Error loading creator products:", err);
+      if (isMounted) setLoading(false);
+    });
 
-  useEffect(() => {
-    loadItems();
-  }, []);
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, [currentUser]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -224,7 +229,6 @@ export default function CreatorProductManager({ currentUser }: CreatorProductMan
       });
 
       alert("Item deleted successfully.");
-      loadItems();
     } catch (err: any) {
       console.error("Error deleting item:", err);
       alert("Failed to delete item: " + err.message);
@@ -367,7 +371,6 @@ export default function CreatorProductManager({ currentUser }: CreatorProductMan
 
       alert("Saved successfully and sent for admin review!");
       setIsModalOpen(false);
-      loadItems();
     } catch (err: any) {
       console.error("Error saving creator product:", err);
       alert("Failed to save product: " + err.message);

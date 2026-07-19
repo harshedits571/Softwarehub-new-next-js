@@ -19,6 +19,7 @@ export default function CreatorDashboardCoordinator() {
 
   const [authorized, setAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -134,10 +135,20 @@ export default function CreatorDashboardCoordinator() {
         currentUser={currentUser}
         userProfile={userProfile}
         onLogout={handleLogout}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#09090f]/10 overflow-hidden max-h-screen">
-        <header className="bg-[#0b0b10] border-b border-white/5 p-6 z-20 shrink-0">
+        <header className="bg-[#0b0b10] border-b border-white/5 p-6 z-20 shrink-0 flex items-center gap-4">
+          <button 
+            className="text-gray-400 hover:text-white lg:hidden"
+            onClick={() => setIsMobileMenuOpen(true)}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           <h2 className="text-xl font-black text-white tracking-tight">
             {TAB_TITLES[activeTab] || activeTab}
           </h2>

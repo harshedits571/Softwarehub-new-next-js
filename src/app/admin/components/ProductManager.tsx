@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { collection, doc, getDocs, getDoc, setDoc, addDoc, deleteDoc, query, where, Timestamp } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, addDoc, deleteDoc, query, where, Timestamp, onSnapshot } from "firebase/firestore";
 import { firestore } from "../../../utils/firebase";
 import { User } from "firebase/auth";
+import { createPortal } from "react-dom";
 
 interface ProductManagerProps {
   category: string;
@@ -105,15 +106,18 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
     }, 4000);
   };
 
-  // Load items from Firebase
-  const loadItems = async () => {
+  // Load items from Firebase using onSnapshot for real-time updates
+  useEffect(() => {
     setLoading(true);
-    try {
-      const q = query(
-        collection(firestore, "products"),
-        where("Category", "==", category)
-      );
-      const snap = await getDocs(q);
+    let isMounted = true;
+
+    const q = query(
+      collection(firestore, "products"),
+      where("Category", "==", category)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      if (!isMounted) return;
       const list: ProductItem[] = [];
       snap.forEach((docSnap) => {
         list.push({
@@ -122,16 +126,21 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
         });
       });
       setItems(list);
-    } catch (err) {
-      console.error("Error loading products:", err);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Error loading products:", err);
+      if (isMounted) setLoading(false);
+    });
+
+    setTargetCollection(category);
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, [category]);
 
   useEffect(() => {
-    loadItems();
-    setTargetCollection(category);
 
     if (importedItem && importedItem.collection === category) {
       openFormModal(importedItem);
@@ -167,7 +176,6 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
       await deleteDoc(docRef);
       await logActivity("Deleted Item", category, itemTitle);
       showToast("Item deleted successfully.", "success");
-      loadItems();
     } catch (err: any) {
       console.error("Error deleting item:", err);
       showToast("Failed to delete item: " + err.message, "error");
@@ -299,7 +307,6 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
 
       alert("Product saved successfully.");
       setIsModalOpen(false);
-      loadItems();
     } catch (err: any) {
       console.error("Error saving product:", err);
       alert("Failed to save product: " + err.message);
@@ -379,11 +386,10 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            item.isPro
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${item.isPro
                               ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
                               : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                          }`}
+                            }`}
                         >
                           {item.isPro ? "PRO" : "FREE"}
                         </span>
@@ -420,9 +426,10 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
       )}
 
       {/* Editor Modal Popup */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-sm flex items-start justify-center py-12 px-4">
-          <div className="glass-card rounded-3xl w-full max-w-5xl p-8 relative my-auto border border-purple-500/20 hover:border-purple-500/40 transition-all">
+      {isModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[999] overflow-y-auto bg-black/90 backdrop-blur-sm custom-scrollbar">
+          <div className="flex min-h-full justify-center p-0 md:p-6 md:pt-[10vh]">
+            <div className="glass-card rounded-none md:rounded-3xl w-full max-w-5xl p-6 md:p-8 relative border-y-0 md:border border-purple-500/20 hover:border-purple-500/40 transition-all mb-12">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
@@ -510,11 +517,10 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                         <span className="text-xs text-gray-300">{sw.label}</span>
                       </label>
                     ))}
-                    <label className={`flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-all ${
-                      compatibleWith.includes("all")
+                    <label className={`flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-all ${compatibleWith.includes("all")
                         ? "bg-purple-600/20 border border-purple-500/30"
                         : "bg-[#07070a]/60 border border-white/5 hover:border-purple-500/40"
-                    }`}>
+                      }`}>
                       <input
                         type="checkbox"
                         checked={compatibleWith.includes("all")}
@@ -581,32 +587,32 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                 {(targetCollection === "simplePluginsList" ||
                   targetCollection === "assets" ||
                   targetCollection === "courses") && (
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-300 ml-1">Download Link URL</label>
-                      <input
-                        type="url"
-                        required
-                        value={downloadLink}
-                        onChange={(e) => setDownloadLink(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                    {targetCollection !== "simplePluginsList" && (
+                    <div className="space-y-5">
                       <div className="space-y-2">
-                        <label className="block text-sm font-semibold text-gray-300 ml-1">Download Panel Description text</label>
+                        <label className="block text-sm font-semibold text-gray-300 ml-1">Download Link URL</label>
                         <input
-                          type="text"
-                          value={downloadDescription}
-                          onChange={(e) => setDownloadDescription(e.target.value)}
-                          placeholder="e.g. Free lifetime download link"
+                          type="url"
+                          required
+                          value={downloadLink}
+                          onChange={(e) => setDownloadLink(e.target.value)}
+                          placeholder="https://..."
                           className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
                         />
                       </div>
-                    )}
-                  </div>
-                )}
+                      {targetCollection !== "simplePluginsList" && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-semibold text-gray-300 ml-1">Download Panel Description text</label>
+                          <input
+                            type="text"
+                            value={downloadDescription}
+                            onChange={(e) => setDownloadDescription(e.target.value)}
+                            placeholder="e.g. Free lifetime download link"
+                            className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
               </div>
 
               {/* Right Column */}
@@ -746,7 +752,7 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                       </div>
                       <div className="space-y-3">
                         {versions.map((ver, idx) => (
-                          <div key={idx} className="flex gap-4 items-center">
+                          <div key={idx} className="flex flex-col md:flex-row gap-2 md:gap-4 md:items-center">
                             <input
                               type="text"
                               placeholder="Version Name (e.g. v2025)"
@@ -757,27 +763,29 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                                 copy[idx].Name = e.target.value;
                                 setVersions(copy);
                               }}
-                              className="bg-dark-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none w-1/3"
+                              className="bg-dark-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none w-full md:w-1/3"
                             />
-                            <input
-                              type="url"
-                              placeholder="Direct download Link URL"
-                              required
-                              value={ver.Link}
-                              onChange={(e) => {
-                                const copy = [...versions];
-                                copy[idx].Link = e.target.value;
-                                setVersions(copy);
-                              }}
-                              className="bg-dark-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none flex-1"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setVersions(versions.filter((_, i) => i !== idx))}
-                              className="text-red-500 hover:text-red-400 text-sm px-2"
-                            >
-                              ✕
-                            </button>
+                            <div className="flex gap-2 w-full md:flex-1">
+                              <input
+                                type="url"
+                                placeholder="Direct download Link URL"
+                                required
+                                value={ver.Link}
+                                onChange={(e) => {
+                                  const copy = [...versions];
+                                  copy[idx].Link = e.target.value;
+                                  setVersions(copy);
+                                }}
+                                className="bg-dark-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none w-full"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setVersions(versions.filter((_, i) => i !== idx))}
+                                className="text-red-500 hover:text-red-400 text-sm px-3 md:px-2 bg-red-500/10 md:bg-transparent rounded-xl md:rounded-none"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -846,7 +854,7 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                           </div>
 
                           {subItems.map((sub, idx) => (
-                            <div key={idx} className="flex gap-4 items-center bg-dark-900/50 p-3 rounded-xl border border-white/5">
+                            <div key={idx} className="flex flex-col md:flex-row gap-2 md:gap-4 md:items-center bg-dark-900/50 p-3 rounded-xl border border-white/5">
                               <input
                                 type="text"
                                 placeholder="Name"
@@ -857,7 +865,7 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                                   copy[idx].Title = e.target.value;
                                   setSubItems(copy);
                                 }}
-                                className="bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none w-1/3"
+                                className="bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none w-full md:w-1/3"
                               />
                               <input
                                 type="url"
@@ -869,31 +877,33 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                                   copy[idx].Link = e.target.value;
                                   setSubItems(copy);
                                 }}
-                                className="bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none flex-1"
+                                className="bg-dark-900 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none w-full md:flex-1"
                               />
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <input
-                                  type="checkbox"
-                                  id={`subPro-${idx}`}
-                                  checked={sub.isPro || false}
-                                  onChange={(e) => {
-                                    const copy = [...subItems];
-                                    copy[idx].isPro = e.target.checked;
-                                    setSubItems(copy);
-                                  }}
-                                  className="w-3.5 h-3.5 accent-indigo-500 cursor-pointer"
-                                />
-                                <label htmlFor={`subPro-${idx}`} className="text-[10px] text-gray-450 cursor-pointer font-bold">
-                                  Pro Link
-                                </label>
+                              <div className="flex items-center justify-between w-full md:w-auto mt-1 md:mt-0">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    id={`subPro-${idx}`}
+                                    checked={sub.isPro || false}
+                                    onChange={(e) => {
+                                      const copy = [...subItems];
+                                      copy[idx].isPro = e.target.checked;
+                                      setSubItems(copy);
+                                    }}
+                                    className="w-3.5 h-3.5 accent-indigo-500 cursor-pointer"
+                                  />
+                                  <label htmlFor={`subPro-${idx}`} className="text-[10px] text-gray-450 cursor-pointer font-bold">
+                                    Pro Link
+                                  </label>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setSubItems(subItems.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:text-red-400 text-sm px-3 md:px-1 bg-red-500/10 md:bg-transparent rounded-lg md:rounded-none py-1 md:py-0"
+                                >
+                                  ✕
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setSubItems(subItems.filter((_, i) => i !== idx))}
-                                className="text-red-500 hover:text-red-400 text-sm px-1"
-                              >
-                                ✕
-                              </button>
                             </div>
                           ))}
                         </div>
@@ -926,7 +936,7 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
                           Remove
                         </button>
                         <span className="text-[10px] text-indigo-400 font-black uppercase">Feature {idx + 1}</span>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <label className="text-[10px] text-gray-500 font-bold">Feature Title</label>
@@ -996,16 +1006,17 @@ export default function ProductManager({ category, currentUser, isSubAdmin, impo
             </form>
           </div>
         </div>
+      </div>,
+        document.body
       )}
 
       {/* Toast Notifier */}
       <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2">
         {toasts.map((t) => (
-          <div key={t.id} className={`px-4 py-3 rounded-xl text-xs font-bold shadow-lg animate-fade-in flex items-center gap-3 border ${
-            t.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-            t.type === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-            'bg-blue-500/10 text-blue-400 border-blue-500/20'
-          }`}>
+          <div key={t.id} className={`px-4 py-3 rounded-xl text-xs font-bold shadow-lg animate-fade-in flex items-center gap-3 border ${t.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+              t.type === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                'bg-blue-500/10 text-blue-400 border-blue-500/20'
+            }`}>
             <i className={`fa-solid ${t.type === 'success' ? 'fa-check-circle' : t.type === 'error' ? 'fa-triangle-exclamation' : 'fa-info-circle'}`}></i>
             {t.msg}
           </div>

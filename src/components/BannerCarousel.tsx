@@ -66,13 +66,13 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({
 
   if (activeBanners.length === 0) {
     return (
-      <section className="mb-20 relative group">
-        <div className="relative w-full aspect-[21/9] md:aspect-[32/10] rounded-3xl overflow-hidden border border-white/5 bg-dark-800 flex items-center justify-center text-center p-8">
+      <section className="mb-20 relative group px-4 sm:px-0">
+        <div className="relative w-full aspect-[4/3] sm:aspect-[21/9] md:aspect-[32/10] rounded-3xl overflow-hidden border border-white/5 bg-dark-800 flex items-center justify-center text-center p-6 md:p-8">
           <div>
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-2">
+            <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white mb-2">
               Welcome to Harsh<span className="text-brand-500">Edits</span>
             </h2>
-            <p className="text-gray-400">The ultimate resource hub for editors.</p>
+            <p className="text-sm text-gray-400">The ultimate resource hub for editors.</p>
           </div>
         </div>
       </section>
@@ -95,8 +95,8 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({
   };
 
   return (
-    <section id="banner-carousel-section" className="mb-20 relative group">
-      <div className="relative w-full aspect-[21/9] md:aspect-[32/10] rounded-3xl overflow-hidden border border-white/5 bg-dark-800">
+    <section id="banner-carousel-section" className="mb-12 md:mb-20 relative group px-4 sm:px-0">
+      <div className="relative w-full aspect-[4/5] sm:aspect-[21/9] md:aspect-[32/10] rounded-3xl overflow-hidden border border-white/5 bg-dark-800">
         <div
           id="banner-slides"
           className="w-full h-full flex transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
@@ -108,14 +108,14 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({
 
             return (
               <div key={banner.id} className="w-full flex-shrink-0 relative h-full text-left">
-                <div className="banner-card-container h-full flex items-center justify-center px-8 md:px-16">
-                  <div className="banner-tilt-card w-full max-w-6xl bg-gradient-to-br from-gray-900/95 via-gray-900/90 to-gray-950/95 rounded-[2rem] border border-white/20 shadow-[0_20px_80px_rgba(0,0,0,0.8)] overflow-hidden relative">
+                <div className="banner-card-container h-full flex items-center justify-center px-2 sm:px-8 md:px-16">
+                  <div className="banner-tilt-card w-full max-w-6xl bg-gradient-to-br from-gray-900/95 via-gray-900/90 to-gray-950/95 rounded-[1.5rem] md:rounded-[2rem] border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.8)] overflow-hidden relative h-full flex flex-col justify-center">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
 
-                    <div className="flex flex-col md:flex-row items-center gap-0 relative z-10">
+                    <div className="flex flex-col md:flex-row items-center gap-0 relative z-10 w-full">
                       {/* Left: Image */}
-                      <div className="w-full md:w-[45%] p-6 md:p-8">
-                        <div className="relative rounded-2xl overflow-hidden aspect-video bg-gradient-to-br from-indigo-500/10 to-purple-500/10 ring-1 ring-white/10">
+                      <div className="w-full md:w-[45%] p-4 md:p-8 pb-2 md:pb-8">
+                        <div className="relative rounded-xl md:rounded-2xl overflow-hidden aspect-video bg-gradient-to-br from-indigo-500/10 to-purple-500/10 ring-1 ring-white/10">
                           <img
                             src={banner.imageURL}
                             className="w-full h-full object-cover"
@@ -126,14 +126,14 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({
                       </div>
 
                       {/* Right: Content */}
-                      <div className="flex-1 p-6 md:p-8 md:pr-12">
-                        <span className="inline-block px-4 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-400/40 text-xs font-bold text-indigo-300 mb-4 uppercase tracking-widest">
+                      <div className="flex-1 p-4 md:p-8 md:pr-12 pt-2 md:pt-8">
+                        <span className="inline-block px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-400/40 text-[10px] md:text-xs font-bold text-indigo-300 mb-2 md:mb-4 uppercase tracking-widest">
                           {banner.subtitle || "Featured"}
                         </span>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white leading-tight mb-3 tracking-tight">
+                        <h2 className="text-lg sm:text-3xl md:text-4xl lg:text-5xl font-black text-white leading-snug md:leading-tight mb-2 md:mb-3 tracking-tight line-clamp-1 sm:line-clamp-none">
                           {banner.title}
                         </h2>
-                        <p className="text-sm md:text-base text-gray-300 leading-relaxed mb-6 line-clamp-2">
+                        <p className="text-xs md:text-base text-gray-300 leading-relaxed mb-4 md:mb-6 line-clamp-2">
                           {banner.description || ""}
                         </p>
                         {banner.buttonText && banner.buttonURL && (
@@ -141,7 +141,7 @@ export const BannerCarousel: React.FC<BannerCarouselProps> = ({
                             href={btnUrl}
                             target={isEasyWorkflow ? undefined : "_blank"}
                             rel={isEasyWorkflow ? undefined : "noopener noreferrer"}
-                            className="inline-block mt-6 gradient-btn text-white font-bold py-3 px-8 rounded-full shadow-lg shadow-indigo-500/30 hover:scale-105 transition-transform"
+                            className="inline-block mt-2 md:mt-6 gradient-btn text-white font-bold py-2.5 px-6 md:py-3 md:px-8 rounded-full shadow-lg shadow-indigo-500/30 hover:scale-105 transition-transform text-xs md:text-sm"
                           >
                             {banner.buttonText}
                           </a>

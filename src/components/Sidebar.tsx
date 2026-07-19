@@ -12,6 +12,8 @@ interface SidebarProps {
   setSearchQuery: (query: string) => void;
   onOpenProfile: () => void;
   allProducts?: any[];
+  isMobileMenuOpen?: boolean;
+  setIsMobileMenuOpen?: (open: boolean) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -21,12 +23,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setSearchQuery,
   onOpenProfile,
   allProducts = [],
+  isMobileMenuOpen,
+  setIsMobileMenuOpen,
 }) => {
   const { currentUser, userProfile, logout } = useAuth();
   const router = useRouter();
 
   const handleProductClick = (id: string) => {
     setSearchQuery("");
+    setIsMobileMenuOpen?.(false);
     router.push("/products/" + id);
   };
 
@@ -38,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     e.preventDefault();
     setActiveTab(tab);
     setSearchQuery("");
+    setIsMobileMenuOpen?.(false);
 
     // Scroll to section
     const el = document.getElementById(tab);
@@ -58,7 +64,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="sidebar">
+    <>
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] lg:hidden"
+          onClick={() => setIsMobileMenuOpen?.(false)}
+        />
+      )}
+      <aside className={`sidebar custom-scrollbar ${isMobileMenuOpen ? "active" : ""} z-50`}>
       {/* Brand Logo */}
       <div className="mb-10">
         <h1
@@ -190,6 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </Link>
         )}
       </div>
-    </aside>
+     </aside>
+   </>
   );
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, doc, deleteDoc, updateDoc, query, orderBy, where, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, deleteDoc, updateDoc, query, orderBy, where, getDoc, limit, onSnapshot } from "firebase/firestore";
 import { firestore } from "../../../utils/firebase";
 
 interface Transaction {
@@ -98,22 +98,25 @@ export default function RevenueUsers() {
   const [userRatings, setUserRatings] = useState<UserRating[]>([]);
   const [loadingModalData, setLoadingModalData] = useState(false);
 
-  const loadData = async () => {
+  // Global Downloads State
+  const [globalDownloads, setGlobalDownloads] = useState<any[]>([]);
+
+  useEffect(() => {
     setLoading(true);
-    try {
-      // 1. Fetch Transactions
-      const txSnap = await getDocs(query(collection(firestore, "transactions"), orderBy("timestamp", "desc")));
+    let isMounted = true;
+
+    // 1. Transactions Listener
+    const txQuery = query(collection(firestore, "transactions"), orderBy("timestamp", "desc"));
+    const unsubTx = onSnapshot(txQuery, (snap) => {
+      if (!isMounted) return;
       const txList: Transaction[] = [];
-      txSnap.forEach((docSnap) => {
+      snap.forEach((docSnap) => {
         const val = docSnap.data();
         let ts = val.timestamp;
-        if (ts && typeof ts.toMillis === "function") {
-          ts = ts.toMillis();
-        } else if (ts && typeof ts === "object" && ts.seconds) {
-          ts = ts.seconds * 1000;
-        } else {
-          ts = Number(ts) || Date.now();
-        }
+        if (ts && typeof ts.toMillis === "function") ts = ts.toMillis();
+        else if (ts && typeof ts === "object" && ts.seconds) ts = ts.seconds * 1000;
+        else ts = Number(ts) || Date.now();
+        
         txList.push({
           id: docSnap.id,
           uid: val.uid || "",
@@ -129,50 +132,32 @@ export default function RevenueUsers() {
         });
       });
       setTransactions(txList);
+    }, (err) => console.error("Error in transactions snapshot:", err));
 
-      // 2. Fetch Users
-      const userSnap = await getDocs(collection(firestore, "users"));
+    // 2. Users Listener
+    const unsubUsers = onSnapshot(collection(firestore, "users"), (snap) => {
+      if (!isMounted) return;
       const userList: UserProfile[] = [];
-      userSnap.forEach((docSnap) => {
+      snap.forEach((docSnap) => {
         const val = docSnap.data();
         let created = val.createdAt;
-        if (created && typeof created.toMillis === "function") {
-          created = created.toMillis();
-        } else if (created && typeof created === "object" && created.seconds) {
-          created = created.seconds * 1000;
-        } else {
-          created = Number(created) || Date.now();
-        }
+        if (created && typeof created.toMillis === "function") created = created.toMillis();
+        else if (created && typeof created === "object" && created.seconds) created = created.seconds * 1000;
+        else created = Number(created) || Date.now();
 
         let lastDl = val.lastDownload;
         if (lastDl && lastDl.timestamp && typeof lastDl.timestamp.toMillis === "function") {
-          lastDl = {
-            ...lastDl,
-            timestamp: lastDl.timestamp.toMillis(),
-          };
+          lastDl = { ...lastDl, timestamp: lastDl.timestamp.toMillis() };
         }
 
         let email = val.email;
         if (!email && val.downloadHistory) {
           const keys = Object.keys(val.downloadHistory);
-          if (keys.length > 0) {
-            email = val.downloadHistory[keys[0]].email;
-          }
+          if (keys.length > 0) email = val.downloadHistory[keys[0]].email;
         }
 
         let name = val.name || val.userName;
-        if (!name && email) {
-          name = email.split("@")[0];
-        }
-
-        // Self-healing: if we resolved an email or name that was missing from the doc, save it back to Firestore
-        if (email && (!val.email || !val.name)) {
-          const docRef = doc(firestore, "users", docSnap.id);
-          updateDoc(docRef, {
-            email: email,
-            name: name || "User",
-          }).catch((err) => console.error("Self-healing doc write failed:", err));
-        }
+        if (!name && email) name = email.split("@")[0];
 
         userList.push({
           uid: docSnap.id,
@@ -193,15 +178,33 @@ export default function RevenueUsers() {
         });
       });
       setUsers(userList);
-    } catch (err) {
-      console.error("Error loading revenue/users data:", err);
-    } finally {
+      setLoading(false); // Once users load, we can remove the spinner
+    }, (err) => {
+      console.error("Error in users snapshot:", err);
       setLoading(false);
-    }
-  };
+    });
 
-  useEffect(() => {
-    loadData();
+    // 3. Global Downloads Listener
+    const dlQuery = query(collection(firestore, "downloadLogs"), orderBy("timestamp", "desc"), limit(50));
+    const unsubDl = onSnapshot(dlQuery, (snap) => {
+      if (!isMounted) return;
+      const gdList = snap.docs.map(d => {
+        const data = d.data();
+        let ts = data.timestamp;
+        if (ts && typeof ts.toMillis === "function") ts = ts.toMillis();
+        else if (ts && typeof ts === "object" && ts.seconds) ts = ts.seconds * 1000;
+        else ts = Number(ts) || Date.now();
+        return { id: d.id, ...data, timestamp: ts };
+      });
+      setGlobalDownloads(gdList);
+    }, (err) => console.error("Error in global downloads snapshot:", err));
+
+    return () => {
+      isMounted = false;
+      unsubTx();
+      unsubUsers();
+      unsubDl();
+    };
   }, []);
 
   // Calculate stats
@@ -218,7 +221,6 @@ export default function RevenueUsers() {
       const userDocRef = doc(firestore, "users", uid);
       await updateDoc(userDocRef, { isPaid: status });
       showToast(`${action}ed Pro Access successfully!`, "success");
-      loadData();
       if (selectedUser?.uid === uid) {
         setSelectedUser((prev) => (prev ? { ...prev, isPaid: status } : null));
       }
@@ -232,7 +234,6 @@ export default function RevenueUsers() {
       const userDocRef = doc(firestore, "users", uid);
       await updateDoc(userDocRef, { isVerified: status });
       showToast(`User ${status ? "verified" : "unverified"} successfully!`, "success");
-      loadData();
       if (selectedUser?.uid === uid) {
         setSelectedUser((prev) => (prev ? { ...prev, isVerified: status } : null));
       }
@@ -249,7 +250,6 @@ export default function RevenueUsers() {
       const userDocRef = doc(firestore, "users", uid);
       await updateDoc(userDocRef, { isBanned: status });
       showToast(`User ${status ? "banned" : "unbanned"} successfully.`, "success");
-      loadData();
       if (selectedUser?.uid === uid) {
         setSelectedUser((prev) => (prev ? { ...prev, isBanned: status } : null));
       }
@@ -270,7 +270,6 @@ export default function RevenueUsers() {
         status: makeCreator ? "approved" : "revoked"
       });
       showToast(`${action}ed Creator Role successfully!`, "success");
-      loadData();
       if (selectedUser?.uid === uid) {
         setSelectedUser((prev) => (prev ? { ...prev, role: makeCreator ? "creator" : "user", isCreatorApproved: makeCreator, status: makeCreator ? "approved" : "revoked" } : null));
       }
@@ -292,7 +291,6 @@ export default function RevenueUsers() {
       await deleteDoc(userDocRef);
       showToast("User deleted successfully.", "success");
       setModalOpen(false);
-      loadData();
     } catch (err: any) {
       showToast("Error: " + err.message, "error");
     }
@@ -734,10 +732,58 @@ export default function RevenueUsers() {
         )}
       </div>
 
+      {/* Global Downloads Feed */}
+      <div className="glass-card p-6 rounded-2xl space-y-6">
+        <div>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">Live Download Intelligence</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Real-time feed of the last 50 customer downloads across the site</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/5 text-gray-400 text-[10px] uppercase font-bold tracking-wider">
+                <th className="pb-3">Timestamp</th>
+                <th className="pb-3">Customer Email</th>
+                <th className="pb-3">Asset Downloaded</th>
+                <th className="pb-3">Version</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 text-xs">
+              {globalDownloads.length > 0 ? (
+                globalDownloads.map((dl) => (
+                  <tr key={dl.id} className="hover:bg-white/2 transition-colors">
+                    <td className="py-4 font-mono text-gray-500">
+                      {new Date(dl.timestamp).toLocaleString()}
+                    </td>
+                    <td className="py-4 text-white font-semibold">
+                      {dl.email || "Anonymous"}
+                    </td>
+                    <td className="py-4 text-indigo-400 font-bold">
+                      {dl.resourceTitle || "Unknown Asset"}
+                    </td>
+                    <td className="py-4">
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/5 border border-white/10 text-gray-300 uppercase">
+                        {dl.versionName || "Latest"}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-gray-500">
+                    No recent downloads found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* User Details / Audit Modal */}
       {modalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex justify-center items-start overflow-y-auto p-4 py-8 md:py-16 bg-black/80 backdrop-blur-sm">
-          <div className="glass-card rounded-3xl w-full max-w-4xl p-6 md:p-8 relative space-y-8 my-auto">
+        <div className="fixed inset-0 z-50 flex justify-center items-start overflow-y-auto p-4 py-8 bg-black/80 backdrop-blur-sm">
+          <div className="glass-card rounded-3xl w-full max-w-4xl p-6 md:p-8 relative space-y-8 mt-12">
             <button
               onClick={() => setModalOpen(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-white text-lg p-2"

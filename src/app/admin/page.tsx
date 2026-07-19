@@ -29,6 +29,7 @@ export default function AdminRoutePage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // State to pass prefilled GDrive synced details to ProductManager
   const [importedItem, setImportedItem] = useState<any | null>(null);
@@ -212,6 +213,8 @@ export default function AdminRoutePage() {
         currentUser={currentUser}
         userProfile={userProfile}
         onLogout={handleLogout}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
       />
 
       {/* Main dashboard content area */}
@@ -219,7 +222,10 @@ export default function AdminRoutePage() {
         {/* Top Header Bar */}
         <header className="bg-[#0b0b10] border-b border-white/5 p-6 flex justify-between items-center z-20 shrink-0">
           <div className="flex items-center gap-4">
-            <button className="text-gray-400 hover:text-white lg:hidden">
+            <button 
+              className="text-gray-400 hover:text-white lg:hidden"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>

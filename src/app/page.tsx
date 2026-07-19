@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [favorites, setFavorites] = useState<Record<string, any>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showPreloader, setShowPreloader] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Modal / Drawer States
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -348,6 +349,8 @@ export default function Dashboard() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           onOpenProfile={() => setIsProfileOpen(true)}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
           allProducts={[
             ...(appData.adobeSoftware || []),
             ...(appData.plugins || []),
@@ -360,9 +363,23 @@ export default function Dashboard() {
         />
 
         {/* Main Panel */}
-        <div className="main-viewport pt-20 lg:pt-8">
-          {/* Top Controls bar */}
-          <div className="flex items-center justify-end gap-4 mb-12">
+        <div className="main-viewport pt-4 lg:pt-8">
+          {/* Top Controls bar (Sticky on Mobile) */}
+          <div className="sticky top-0 lg:relative z-30 flex items-center justify-between gap-4 mb-8 lg:mb-12 py-4 lg:py-0 bg-[#07070a]/90 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none border-b border-white/5 lg:border-none -mx-6 px-6 lg:mx-0 lg:px-0">
+            <div className="flex items-center gap-2 lg:hidden">
+              <button 
+                className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 active:scale-95 transition-all"
+                onClick={() => setIsMobileMenuOpen(true)}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <span className="text-base font-black text-white tracking-tighter select-none">
+                Harsh<span className="text-brand-500">Edits</span>
+              </span>
+            </div>
+            
             {!userProfile?.isPaid && userProfile?.role !== "admin" && userProfile?.role !== "sub-admin" && userProfile?.role !== "creator" ? (
               <button
                 onClick={() => {

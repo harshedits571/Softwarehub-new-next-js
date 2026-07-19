@@ -9,6 +9,8 @@ interface CreatorSidebarProps {
   currentUser: any;
   userProfile: any;
   onLogout: () => void;
+  isMobileMenuOpen?: boolean;
+  setIsMobileMenuOpen?: (open: boolean) => void;
 }
 
 export default function CreatorSidebar({
@@ -17,6 +19,8 @@ export default function CreatorSidebar({
   currentUser,
   userProfile,
   onLogout,
+  isMobileMenuOpen = false,
+  setIsMobileMenuOpen,
 }: CreatorSidebarProps) {
   const details = userProfile?.creatorDetails || {};
   const displayName = details.displayName || userProfile?.username || "Creator";
@@ -30,8 +34,26 @@ export default function CreatorSidebar({
   ];
 
   return (
-    <aside className="w-80 bg-[#09090e] border-r border-white/5 flex flex-col justify-between shrink-0 p-6 relative">
-      <div className="space-y-10">
+    <>
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && setIsMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-[#09090e] border-r border-white/5 flex flex-col justify-between transform transition-transform duration-300 lg:translate-x-0 lg:static lg:shrink-0 p-6 shadow-[4px_0_24px_rgba(0,0,0,0.4)] ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="space-y-10 relative">
+          {/* Mobile close button */}
+          <button 
+            className="absolute top-0 right-0 text-gray-400 hover:text-white lg:hidden"
+            onClick={() => setIsMobileMenuOpen && setIsMobileMenuOpen(false)}
+          >
+            <i className="fa-solid fa-xmark text-xl"></i>
+          </button>
+
         {/* Brand/Logo */}
         <div>
           <Link href="/" className="font-bold tracking-tighter text-white text-2xl flex items-center gap-1 hover:scale-[1.02] transition-transform">
@@ -49,7 +71,10 @@ export default function CreatorSidebar({
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+              }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold transition-all relative overflow-hidden group ${
                 activeTab === item.id
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
@@ -95,5 +120,6 @@ export default function CreatorSidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }

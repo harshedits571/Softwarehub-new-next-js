@@ -323,9 +323,9 @@ export default function BannerManager() {
               return (
                 <div
                   key={banner.id}
-                  className="glass-card hover:border-indigo-500/30 p-4 rounded-2xl flex items-center justify-between gap-6 transition-all group"
+                  className="glass-card hover:border-indigo-500/30 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 transition-all group"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 w-full md:w-auto">
                     {/* Reorder Buttons */}
                     <div className="flex flex-col items-center gap-1.5 text-gray-500">
                       <button
@@ -358,7 +358,7 @@ export default function BannerManager() {
                       <h4 className="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">
                         {banner.title}
                       </h4>
-                      <div className="flex gap-2 text-[10px] mt-1.5">
+                      <div className="flex gap-2 text-[10px] mt-1.5 flex-wrap">
                         <span
                           className={`px-2 py-0.5 rounded-full border ${
                             banner.active
@@ -378,7 +378,7 @@ export default function BannerManager() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-end mt-2 md:mt-0 pt-3 md:pt-0 border-t border-white/5 md:border-t-0">
                     <button
                       onClick={() => openFormModal(banner)}
                       className="bg-white/5 hover:bg-indigo-600 hover:text-white border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-indigo-400 transition-all"
