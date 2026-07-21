@@ -29,9 +29,7 @@ export default function AuthPage() {
         await setDoc(userDocRef, {
           name: user.displayName || "Google User",
           email: user.email,
-          role: "user",
           status: "active",
-          isPaid: false,
           joinedAt: new Date().toLocaleDateString("en-US", {
             year: "numeric",
             month: "short",

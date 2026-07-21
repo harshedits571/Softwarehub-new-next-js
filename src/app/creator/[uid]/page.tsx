@@ -221,31 +221,14 @@ export default function CreatorStorefront() {
       return;
     }
 
-    // Free downloads logic
-    const freeDownloads = userProfile?.freeDownloads || {};
-    const downloadCount = Object.keys(freeDownloads).length;
-
-    if (selectedItem && freeDownloads[selectedItem.id]) {
-      await executeDownloadLink();
-      return;
-    }
-
-    if (downloadCount < 2) {
-      if (selectedItem) {
-        const userDocRef = doc(firestore, "users", currentUser.uid);
-        await updateDoc(userDocRef, {
-          [`freeDownloads.${selectedItem.id}`]: Timestamp.now()
-        });
-      }
-      await executeDownloadLink();
-    } else {
-      setCheckoutItem({
-        id: null,
-        title: "Pro Membership",
-        amount: pricing.activePrice,
+    // Unlimited free downloads for Creator Storefront
+    if (selectedItem && !userProfile?.freeDownloads?.[selectedItem.id]) {
+      const userDocRef = doc(firestore, "users", currentUser.uid);
+      await updateDoc(userDocRef, {
+        [`freeDownloads.${selectedItem.id}`]: Timestamp.now()
       });
-      setIsCheckoutOpen(true);
     }
+    await executeDownloadLink();
   };
 
   const categories = [

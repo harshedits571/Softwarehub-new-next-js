@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { firestore } from "../../../utils/firebase";
 
 interface CreatorPayoutsProps {
@@ -24,46 +24,46 @@ export default function CreatorPayouts({ currentUser }: CreatorPayoutsProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSales = async () => {
-      setLoading(true);
-      try {
-        const q = query(
-          collection(firestore, "transactions"),
-          where("vendorId", "==", currentUser.uid)
-        );
-        const snap = await getDocs(q);
-        const list: Transaction[] = [];
-        snap.forEach((docSnap) => {
-          const val = docSnap.data();
-          let ts = val.timestamp;
-          if (ts && typeof ts.toMillis === "function") ts = ts.toMillis();
-          else if (ts && typeof ts === "object" && ts.seconds) ts = ts.seconds * 1000;
-          else ts = Number(ts) || Date.now();
+    if (!currentUser?.uid) return;
 
-          list.push({
-            id: docSnap.id,
-            itemTitle: val.itemTitle || "Untitled Asset",
-            amount: Number(val.amount) || 0,
-            currency: val.currency || "INR",
-            timestamp: ts,
-            paymentId: val.paymentId || "N/A",
-            email: val.email || "N/A",
-            userName: val.userName || val.name || "Customer",
-          });
+    setLoading(true);
+    const q = query(
+      collection(firestore, "transactions"),
+      where("vendorId", "==", currentUser.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const list: Transaction[] = [];
+      snap.forEach((docSnap) => {
+        const val = docSnap.data();
+        let ts = val.timestamp;
+        if (ts && typeof ts.toMillis === "function") ts = ts.toMillis();
+        else if (ts && typeof ts === "object" && ts.seconds) ts = ts.seconds * 1000;
+        else ts = Number(ts) || Date.now();
+
+        list.push({
+          id: docSnap.id,
+          itemTitle: val.itemTitle || "Untitled Asset",
+          amount: Number(val.amount) || 0,
+          currency: val.currency || "INR",
+          timestamp: ts,
+          paymentId: val.paymentId || "N/A",
+          email: val.email || "N/A",
+          userName: val.userName || val.name || "Customer",
         });
-        
-        // Sort in memory by timestamp descending
-        list.sort((a, b) => b.timestamp - a.timestamp);
-        setSales(list);
-      } catch (err) {
-        console.error("Error loading creator sales ledger:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
 
-    fetchSales();
-  }, []);
+      // Sort in memory by timestamp descending
+      list.sort((a, b) => b.timestamp - a.timestamp);
+      setSales(list);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error loading creator sales ledger:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
 
   const totalSalesCount = sales.length;
   
