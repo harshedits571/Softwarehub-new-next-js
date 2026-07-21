@@ -272,7 +272,6 @@ export default function Dashboard() {
       }, 1500);
     };
 
-    // Premium logic check
     const isAdmin = userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
     const isPaid = userProfile?.isPaid || isAdmin;
 
@@ -286,6 +285,39 @@ export default function Dashboard() {
         });
         setIsCheckoutOpen(true);
         return;
+      }
+    }
+
+    // Log a ₹0 order for free products so it appears in Creator Sales & CRM
+    if (actualPrice === 0 && selectedItem) {
+      try {
+        const q = query(
+          collection(firestore, "transactions"),
+          where("uid", "==", currentUser.uid),
+          where("productId", "==", selectedItem.id)
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          await addDoc(collection(firestore, "transactions"), {
+            uid: currentUser.uid,
+            email: currentUser.email || "N/A",
+            userName: currentUser.displayName || "N/A",
+            amount: 0,
+            currency: pricing.currency,
+            itemId: selectedItem.id,
+            productId: selectedItem.id,
+            itemTitle: selectedItem.Title,
+            paymentId: "FREE_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+            type: "individual",
+            vendorId: selectedItem.ownerUid || (selectedItem as any).vendorId || "platform",
+            payoutAccountId: "",
+            platformCommission: 0,
+            creatorPayout: 0,
+            timestamp: Timestamp.now(),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to check or log existing free transaction:", err);
       }
     }
 

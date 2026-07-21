@@ -99,11 +99,13 @@ export default function CreatorCRM() {
     }) : [];
 
   const productOrders: any[] = selectedProduct ? (
-    creatorProducts.find(p => p.id === selectedProduct.id)?.orders || []
+    (creatorProducts.find(p => p.id === selectedProduct.id)?.orders || [])
+      .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
   ) : [];
 
   const productDownloads = selectedProduct ? (
-    creatorProducts.find(p => p.id === selectedProduct.id)?.downloads || []
+    (creatorProducts.find(p => p.id === selectedProduct.id)?.downloads || [])
+      .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
   ) : [];
 
   const liveCreator = selectedCreator 
