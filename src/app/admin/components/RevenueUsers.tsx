@@ -165,7 +165,7 @@ export default function RevenueUsers() {
           name: name || "Anonymous",
           email: email || "",
           createdAt: created,
-          isPaid: !!val.isPaid,
+          isPaid: !!val.isPaid || !!val.purchased?.["PRO_BUNDLE"],
           isBanned: !!val.isBanned,
           isVerified: !!val.isVerified,
           role: val.role || "user",
@@ -219,7 +219,10 @@ export default function RevenueUsers() {
 
     try {
       const userDocRef = doc(firestore, "users", uid);
-      await updateDoc(userDocRef, { isPaid: status });
+      await updateDoc(userDocRef, { 
+        isPaid: status,
+        "purchased.PRO_BUNDLE": status
+      });
       showToast(`${action}ed Pro Access successfully!`, "success");
       if (selectedUser?.uid === uid) {
         setSelectedUser((prev) => (prev ? { ...prev, isPaid: status } : null));

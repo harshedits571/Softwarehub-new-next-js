@@ -99,8 +99,19 @@ export default function AdminSidebar({
         </div>
 
       <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
+        {(() => {
+          const isSuperAdmin = userProfile?.role === "admin";
+          const permissions = userProfile?.permissions || {};
+          
+          const visibleTabs = tabs.filter((tab) => {
+            if (isSuperAdmin) return true;
+            if (tab.id === "dashboard") return true;
+            if (tab.id === "brokenLinks") return !!permissions.brokenLinkReports;
+            return !!permissions[tab.id];
+          });
+          
+          return visibleTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
@@ -117,7 +128,8 @@ export default function AdminSidebar({
               <span>{tab.label}</span>
             </button>
           );
-        })}
+        });
+        })()}
       </nav>
 
       {/* User profile & logout section */}

@@ -42,7 +42,7 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({ children, title, subti
       {/* Content */}
       <main className="pt-32 pb-20 px-6 max-w-[900px] mx-auto w-full relative z-10 flex-1">
         <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-black text-white mb-4 tracking-tighter">
+          <h1 className="text-5xl md:text-6xl font-black text-white mb-4 tracking-normal">
             {title}
           </h1>
           <p className="text-gray-400 text-sm">{subtitle}</p>

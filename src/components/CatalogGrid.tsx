@@ -19,25 +19,31 @@ interface CatalogGridProps {
   favorites: Record<string, boolean>;
   onToggleFavorite: (itemId: string, itemData: any, type: string) => void;
   onItemClick: (collectionName: string, itemId: string) => void;
+  activeTab?: string;
 }
+
+const DEFAULT_SECTION_NAMES: Record<string, string> = {
+  adobeSoftware: "Adobe Software",
+  plugins: "Premium Plugins",
+  scripts: "Scripts & Extensions",
+  assets: "VFX Assets",
+  utilities: "Utilities",
+  courses: "Courses",
+  creator_product: "Community Creations",
+};
 
 export const CatalogGrid: React.FC<CatalogGridProps> = ({
   data,
-  sectionNames = {
-    adobeSoftware: "Adobe Software",
-    plugins: "Premium Plugins",
-    scripts: "Scripts & Extensions",
-    assets: "VFX Assets",
-    utilities: "Utilities",
-    courses: "Courses",
-    creator_product: "Community Creations",
-  },
+  sectionNames = {},
   searchQuery,
   currency,
   favorites,
   onToggleFavorite,
   onItemClick,
+  activeTab,
 }) => {
+  const displayNames = { ...DEFAULT_SECTION_NAMES, ...sectionNames };
+
   const sections = [
     { id: "software", key: "adobeSoftware", sub: "Pre-configured design tools ready to build assets." },
     { id: "plugins", key: "plugins", sub: "Third party plug-in integrations for visual effects." },
@@ -67,18 +73,21 @@ export const CatalogGrid: React.FC<CatalogGridProps> = ({
         // Hide section if searching and there are no matching items
         if (searchQuery && filteredItems.length === 0) return null;
 
+        // If not searching, only show the active tab (if one is provided)
+        if (!searchQuery && activeTab && section.id !== activeTab) return null;
+
         return (
           <section key={section.id} id={section.id} className="scroll-mt-24">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-white tracking-tight border-l-4 border-brand-500 pl-3">
-                {sectionNames[section.key] || section.key}
+                {displayNames[section.key] || section.key}
               </h2>
               <p className="text-xs text-gray-500 mt-1 pl-3">{section.sub}</p>
             </div>
 
             {filteredItems.length === 0 ? (
               <p className="text-xs text-gray-400 py-8 pl-3">
-                {sectionNames[section.key]} will appear here once added via the Admin Panel.
+                {displayNames[section.key]} will appear here once added via the Admin.
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">

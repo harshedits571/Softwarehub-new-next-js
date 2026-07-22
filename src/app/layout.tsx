@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
 import Script from "next/script";
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-outfit",
 });
 
 export const metadata: Metadata = {
@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -46,7 +46,7 @@ export default function RootLayout({
           referrerPolicy="no-referrer"
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#0b0b10] text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white">
+      <body className="font-sans min-h-full flex flex-col bg-[#0b0b10] text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white">
         <AuthProvider>
           {children}
         </AuthProvider>

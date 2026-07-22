@@ -323,7 +323,7 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
     };
 
     const isAdmin = userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
-    const isPaid = userProfile?.isPaid || isAdmin;
+    const isPaid = userProfile?.isPaid || !!userProfile?.purchased?.["PRO_BUNDLE"] || isAdmin;
     const alreadyPurchased = !!userProfile?.purchased?.[product.id];
     const alreadyFreeDownloaded = !!userProfile?.freeDownloads?.[product.id];
 

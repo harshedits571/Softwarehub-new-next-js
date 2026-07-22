@@ -85,7 +85,8 @@ export default function DashboardStats({ setActiveTab, isSuperAdmin }: Dashboard
         statsData.totalUsers = usersSnap.size;
         let paid = 0;
         usersSnap.forEach((docSnap) => {
-          if (docSnap.data().isPaid === true) {
+          const data = docSnap.data();
+          if (data.isPaid === true || data.purchased?.["PRO_BUNDLE"] === true) {
             paid++;
           }
         });

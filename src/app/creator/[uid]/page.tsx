@@ -173,35 +173,8 @@ export default function CreatorStorefront() {
     const priceUSDVal = parseFloat(selectedItem?.priceUSD as string) || 0;
     const actualPrice = pricing.currency === "INR" ? priceVal : priceUSDVal;
 
-    const executeDownloadLink = async () => {
-      const win = window.open(rawLink, "_blank");
-      if (win) win.focus();
-
-      // Log download details
-      const logData = {
-        uid: currentUser.uid,
-        email: currentUser.email || "Anonymous",
-        resourceId: selectedItem?.id || "unknown",
-        resourceTitle: title,
-        versionName: versionName,
-        timestamp: Timestamp.now(),
-        ownerUid: selectedItem?.ownerUid || selectedItem?.vendorId || "platform",
-      };
-
-      await addDoc(collection(firestore, "downloadLogs"), logData);
-
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, {
-        lastDownload: {
-          resourceTitle: title,
-          versionName: versionName,
-          timestamp: Timestamp.now(),
-        }
-      });
-    };
-
     const isAdmin = userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
-    const isPaid = userProfile?.isPaid || isAdmin;
+    const isPaid = userProfile?.isPaid || !!userProfile?.purchased?.["PRO_BUNDLE"] || isAdmin;
 
     if (actualPrice > 0 && selectedItem) {
       const hasPurchased = userProfile?.purchased?.[selectedItem.id];
@@ -216,52 +189,77 @@ export default function CreatorStorefront() {
       }
     }
 
-    // Log a ₹0 order for free products so it appears in Creator Sales & CRM
-    if (actualPrice === 0 && selectedItem) {
+    // 1. Open the window immediately to bypass popup blockers
+    const win = window.open(rawLink, "_blank");
+    if (win) {
+      win.focus();
+    } else {
+      showToast("Popup blocked! Please allow popups to download.", "error");
+      window.location.href = rawLink; // Fallback
+    }
+
+    // 2. Background logging
+    (async () => {
       try {
-        const q = query(
-          collection(firestore, "transactions"),
-          where("uid", "==", currentUser.uid),
-          where("productId", "==", selectedItem.id)
-        );
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          await addDoc(collection(firestore, "transactions"), {
-            uid: currentUser.uid,
-            email: currentUser.email || "N/A",
-            userName: currentUser.displayName || "N/A",
-            amount: 0,
-            currency: pricing.currency,
-            itemId: selectedItem.id,
-            productId: selectedItem.id,
-            itemTitle: selectedItem.Title,
-            paymentId: "FREE_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
-            type: "individual",
-            vendorId: selectedItem.ownerUid || selectedItem.vendorId || "platform",
-            payoutAccountId: "",
-            platformCommission: 0,
-            creatorPayout: 0,
+        // Log download details
+        const logData = {
+          uid: currentUser.uid,
+          email: currentUser.email || "Anonymous",
+          resourceId: selectedItem?.id || "unknown",
+          resourceTitle: title,
+          versionName: versionName,
+          timestamp: Timestamp.now(),
+          ownerUid: selectedItem?.ownerUid || selectedItem?.vendorId || "platform",
+        };
+        await addDoc(collection(firestore, "downloadLogs"), logData);
+
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+          lastDownload: {
+            resourceTitle: title,
+            versionName: versionName,
             timestamp: Timestamp.now(),
-          });
+          }
+        });
+
+        // Log a ₹0 order for free products so it appears in Creator Sales & CRM
+        if (actualPrice === 0 && selectedItem) {
+          const q = query(
+            collection(firestore, "transactions"),
+            where("uid", "==", currentUser.uid),
+            where("productId", "==", selectedItem.id)
+          );
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            await addDoc(collection(firestore, "transactions"), {
+              uid: currentUser.uid,
+              email: currentUser.email || "N/A",
+              userName: currentUser.displayName || "N/A",
+              amount: 0,
+              currency: pricing.currency,
+              itemId: selectedItem.id,
+              productId: selectedItem.id,
+              itemTitle: selectedItem.Title,
+              paymentId: "FREE_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+              type: "individual",
+              vendorId: selectedItem.ownerUid || selectedItem.vendorId || "platform",
+              payoutAccountId: "",
+              platformCommission: 0,
+              creatorPayout: 0,
+              timestamp: Timestamp.now(),
+            });
+          }
+          
+          if (!isAdmin && !isPaid && !userProfile?.freeDownloads?.[selectedItem.id]) {
+            await updateDoc(userDocRef, {
+              [`freeDownloads.${selectedItem.id}`]: Timestamp.now()
+            });
+          }
         }
       } catch (err) {
-        console.error("Failed to check or log existing free transaction:", err);
+        console.error("Background logging failed:", err);
       }
-    }
-
-    if (isAdmin || isPaid) {
-      await executeDownloadLink();
-      return;
-    }
-
-    // Unlimited free downloads for Creator Storefront
-    if (selectedItem && !userProfile?.freeDownloads?.[selectedItem.id]) {
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, {
-        [`freeDownloads.${selectedItem.id}`]: Timestamp.now()
-      });
-    }
-    await executeDownloadLink();
+    })();
   };
 
   const categories = [

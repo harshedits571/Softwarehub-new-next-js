@@ -200,12 +200,14 @@ function CheckoutPageInner() {
             const updatedPurchased = { ...(userData?.purchased || {}) };
             if (!isProMembership && productId) {
               updatedPurchased[productId] = true;
+            } else if (isProMembership) {
+              updatedPurchased["PRO_BUNDLE"] = true; // Pro Membership Token
             }
 
             await updateDoc(userDocRef, {
               paymentId: paymentId,
               paidAt: Timestamp.now(),
-              isPaid: isProMembership ? true : !!userData?.isPaid,
+              // isPaid is protected by firestore.rules, so we cannot update it here
               purchased: updatedPurchased,
             });
 

@@ -100,7 +100,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const displayPrice = currency === "USD" ? `$${amount.toFixed(2)}` : `₹${amount}`;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!currentUser) {
@@ -115,98 +115,138 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    const finalAmount = Math.round(amount * 100);
     const description = itemId ? `Access to: ${itemTitle}` : "Lifetime Pro Access Bundle";
 
-    // 10% platform / 90% creator split
-    const platformFee = amount * 0.1;
-    const creatorShare = amount * 0.9;
+    try {
+      const platformFee = amount * 0.1;
+      const creatorShare = amount * 0.9;
 
-    const options: any = {
-      key: rzpKey,
-      amount: finalAmount,
-      currency: currency,
-      name: "SoftwhereHub",
-      description: description,
-      image: "/assets/logo.png",
-      payment_capture: 1,
-      notes: {
-        vendorId: vendorId || "platform",
-        razorpayAccountId: creatorRzpAccount || "",
-        platformCommission: platformFee.toString(),
-        creatorPayout: creatorShare.toString(),
-      },
-      handler: async function (response: any) {
-        if (response.razorpay_payment_id) {
-          try {
-            const paymentId = response.razorpay_payment_id;
-            
-            const userDocRef = doc(firestore, "users", currentUser.uid);
-            const userProfileSnap = await getDoc(userDocRef);
-            const userProfileData = userProfileSnap.exists() ? userProfileSnap.data() : {};
-            
-            const updatedPurchased = { ...(userProfileData?.purchased || {}) };
-            if (itemId) {
-              updatedPurchased[itemId] = true;
+      // 1. Create order server-side (with Route transfer if creator product)
+      const orderRes = await fetch("/api/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amount,
+          currency: currency,
+          productId: itemId || "PRO_BUNDLE",
+          productTitle: itemTitle || "Lifetime Pro Access",
+          customerEmail: email || currentUser.email || "",
+          customerName: name || currentUser.displayName || "",
+          creatorLinkedAccountId: creatorRzpAccount || null,
+          platformCommissionPercent: 10,
+        }),
+      });
+
+      const orderData = await orderRes.json();
+
+      if (!orderData.success || !orderData.id) {
+        throw new Error(orderData.error || "Failed to create Razorpay order");
+      }
+
+      const options: any = {
+        key: rzpKey,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.id,
+        name: "SoftwhereHub",
+        description: description,
+        image: "/assets/logo.png",
+        handler: async function (response: any) {
+          if (response.razorpay_payment_id) {
+            try {
+              // 2. Verify payment signature
+              const verifyRes = await fetch("/api/verify-payment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              });
+              
+              const verifyData = await verifyRes.json();
+              if (!verifyData.success) {
+                throw new Error("Payment signature verification failed.");
+              }
+
+              const paymentId = response.razorpay_payment_id;
+              const orderId = response.razorpay_order_id;
+              
+              const userDocRef = doc(firestore, "users", currentUser.uid);
+              const userProfileSnap = await getDoc(userDocRef);
+              const userProfileData = userProfileSnap.exists() ? userProfileSnap.data() : {};
+              
+              const updatedPurchased = { ...(userProfileData?.purchased || {}) };
+              if (itemId) {
+                updatedPurchased[itemId] = true;
+              } else {
+                updatedPurchased["PRO_BUNDLE"] = true; // Pro Membership Token
+              }
+
+              await updateDoc(userDocRef, {
+                paymentId: paymentId,
+                paidAt: Timestamp.now(),
+                // isPaid is protected by firestore.rules, so we cannot update it here
+                purchased: updatedPurchased
+              });
+
+              const transactionRef = collection(firestore, "transactions");
+              await addDoc(transactionRef, {
+                uid: currentUser.uid,
+                email: currentUser.email || "N/A",
+                userName: name || currentUser.displayName || "N/A",
+                amount: amount,
+                currency: currency,
+                itemId: itemId || "PRO_BUNDLE",
+                productId: itemId || "PRO_BUNDLE",
+                itemTitle: itemTitle || "Lifetime Pro Access",
+                paymentId: paymentId,
+                orderId: orderId || null,
+                type: itemId ? "individual" : "pro_membership",
+                vendorId: vendorId || "platform",
+                payoutAccountId: creatorRzpAccount || "",
+                platformCommission: itemId ? platformFee : 0,
+                creatorPayout: itemId ? creatorShare : 0,
+                routeTransfer: orderData.hasTransfer || false,
+                timestamp: Timestamp.now(),
+              });
+
+              const logRef = collection(firestore, "auditLogs");
+              await addDoc(logRef, {
+                type: "Payment",
+                user: currentUser.email || "N/A",
+                detail: `Paid ${currency} ${amount} for ${itemTitle || "Lifetime Pro Access"}. split: platform ${platformFee}, creator ${creatorShare}`,
+                timestamp: Timestamp.now(),
+              });
+
+              onSuccess(paymentId);
+              onClose();
+            } catch (err) {
+              console.error("Error executing payment updates:", err);
+              onAlert("Payment successful, but database logs failed. Please contact support.", "DB Error", "error");
             }
-
-            await updateDoc(userDocRef, {
-              paymentId: paymentId,
-              paidAt: Timestamp.now(),
-              isPaid: itemId ? !!userProfileData?.isPaid : true,
-              purchased: updatedPurchased
-            });
-
-            const transactionRef = collection(firestore, "transactions");
-            await addDoc(transactionRef, {
-              uid: currentUser.uid,
-              email: currentUser.email || "N/A",
-              userName: name || currentUser.displayName || "N/A",
-              amount: amount,
-              currency: currency,
-              itemId: itemId || "PRO_BUNDLE",
-              productId: itemId || "PRO_BUNDLE",
-              itemTitle: itemTitle || "Lifetime Pro Access",
-              paymentId: paymentId,
-              type: itemId ? "individual" : "pro_membership",
-              vendorId: vendorId || "platform",
-              payoutAccountId: creatorRzpAccount || "",
-              platformCommission: itemId ? platformFee : 0,
-              creatorPayout: itemId ? creatorShare : 0,
-              timestamp: Timestamp.now(),
-            });
-
-            const logRef = collection(firestore, "auditLogs");
-            await addDoc(logRef, {
-              type: "Payment",
-              user: currentUser.email || "N/A",
-              detail: `Paid ${currency} ${amount} for ${itemTitle || "Lifetime Pro Access"}. split: platform ${platformFee}, creator ${creatorShare}`,
-              timestamp: Timestamp.now(),
-            });
-
-            onSuccess(paymentId);
-            onClose();
-          } catch (err) {
-            console.error("Error executing payment updates:", err);
-            onAlert("Payment successful, but database logs failed. Please contact support.", "DB Error", "error");
           }
-        }
-      },
-      prefill: {
-        name: name || currentUser.displayName || "",
-        email: email || currentUser.email || "",
-        contact: countryCode + phone,
-      },
-      theme: {
-        color: "#4f46e5",
-      },
-    };
+        },
+        prefill: {
+          name: name || currentUser.displayName || "",
+          email: email || currentUser.email || "",
+          contact: countryCode + phone,
+        },
+        theme: {
+          color: "#4f46e5",
+        },
+      };
 
-    const rzp = new Razorpay(options);
-    rzp.on("payment.failed", function (response: any) {
-      onAlert("Payment Failed: " + response.error.description, "Transaction Error", "error");
-    });
-    rzp.open();
+      const rzp = new Razorpay(options);
+      rzp.on("payment.failed", function (response: any) {
+        onAlert("Payment Failed: " + response.error.description, "Transaction Error", "error");
+      });
+      rzp.open();
+    } catch (err: any) {
+      console.error("Checkout initiation failed:", err);
+      onAlert(err.message || "Failed to initialize checkout.", "Error", "error");
+    }
   };
 
   return (

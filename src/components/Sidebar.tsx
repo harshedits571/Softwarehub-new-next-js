@@ -44,15 +44,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setActiveTab(tab);
     setSearchQuery("");
     setIsMobileMenuOpen?.(false);
-
-    // Scroll to section
-    const el = document.getElementById(tab);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
-    }
+    
+    // Scroll to top of main view when changing tabs
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const menuItems = [
+    { id: "home", label: "Home", icon: "fa-solid fa-house" },
     { id: "software", label: "Software", icon: "fa-solid fa-layer-group" },
     { id: "plugins", label: "Plugins", icon: "fa-solid fa-puzzle-piece" },
     { id: "scripts", label: "Scripts", icon: "fa-solid fa-terminal" },
@@ -76,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="mb-10">
         <h1
           onClick={() => {
-            setActiveTab("software");
+            setActiveTab("home");
             setSearchQuery("");
           }}
           className="fluid-logo font-bold tracking-tighter text-white cursor-pointer select-none"
@@ -172,15 +170,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     alt="User Avatar"
                     className="w-full h-full object-cover"
                   />
+                ) : currentUser?.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt="User Avatar"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <span>
-                    {userProfile?.username ? userProfile.username[0].toUpperCase() : "U"}
+                    {(currentUser?.displayName || userProfile?.username || "U")[0].toUpperCase()}
                   </span>
                 )}
               </div>
               <div className="text-left min-w-0 flex-1">
                 <p className="text-xs font-semibold text-white truncate">
-                  {userProfile?.username || "User"}
+                  {currentUser?.displayName || userProfile?.username || "User"}
                 </p>
                 <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
                   My Profile

@@ -27,7 +27,7 @@
 }
 
 @theme {
-  --font-sans: var(--font-plus-jakarta), sans-serif;
+  --font-sans: var(--font-outfit), sans-serif;
   --color-dark-900: #07070a;
   --color-dark-800: #0f0f15;
   --color-dark-700: #151520;
@@ -520,6 +520,15 @@ body {
   100% {
     transform: translateX(100%);
   }
+}
+
+@keyframes marquee-anim {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee-anim 20s linear infinite;
 }
 
 /* --- Hero Premium Animations --- */

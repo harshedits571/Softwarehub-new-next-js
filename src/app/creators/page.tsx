@@ -5,6 +5,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { firestore } from "../../utils/firebase";
 import { LegalLayout } from "../../components/LegalLayout";
+import ScrollReveal from "../../components/ScrollReveal";
 
 interface Creator {
   uid: string;
@@ -54,7 +55,7 @@ export default function CreatorsDirectory() {
     <LegalLayout
       title={
         <>
-          Creative <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-indigo-500">Storefronts</span>
+          Creator's <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-indigo-500">Storefronts</span>
         </>
       }
       subtitle="Discover and browse exclusive resources uploaded by certified community creators."
@@ -68,15 +69,16 @@ export default function CreatorsDirectory() {
         <div className="space-y-8">
           {creators.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {creators.map((creator) => {
+              {creators.map((creator, index) => {
                 const details = creator.creatorDetails || {};
                 const displayName = details.displayName || creator.name || "Anonymous Creator";
                 const bio = details.bio || "Certified SoftwhereHub marketplace merchant uploading premium editing assets.";
                 const avatar = details.avatarUrl || "";
 
                 return (
-                  <div
+                  <ScrollReveal
                     key={creator.uid}
+                    delay={index * 0.1}
                     className="glass-card hover:border-indigo-500/30 p-6 rounded-3xl flex flex-col justify-between transition-all group relative overflow-hidden bg-[#0A0A0F]/80 backdrop-blur-md border border-white/5 shadow-xl"
                   >
                     {/* Background glow hover effect */}
@@ -112,7 +114,7 @@ export default function CreatorsDirectory() {
                         Visit Storefront <i className="fa-solid fa-arrow-right text-[10px]"></i>
                       </Link>
                     </div>
-                  </div>
+                  </ScrollReveal>
                 );
               })}
             </div>

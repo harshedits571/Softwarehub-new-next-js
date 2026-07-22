@@ -10,7 +10,7 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ onExploreClick, onPremiumClick }) => {
   const { userProfile } = useAuth();
-  const isPremium = !!userProfile?.isPaid || userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
+  const isPremium = !!userProfile?.isPaid || !!userProfile?.purchased?.["PRO_BUNDLE"] || userProfile?.role === "admin" || userProfile?.role === "sub-admin" || userProfile?.role === "creator";
 
   return (
     <section className="py-12 md:py-32 mb-8 md:mb-16 relative overflow-hidden animate-fade-in-up flex flex-col items-center justify-center text-center border-b border-white/5 px-4">
@@ -25,7 +25,7 @@ export const Hero: React.FC<HeroProps> = ({ onExploreClick, onPremiumClick }) =>
           <i className="fa-solid fa-wand-magic-sparkles text-[10px] animate-pulse"></i>
           Harsh Edits Ecosystem
         </div>
-        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[90px] font-black tracking-tighter text-white mb-6 leading-[1.1] md:leading-[1.05] drop-shadow-2xl">
+        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[90px] font-black tracking-normal text-white mb-6 leading-[1.1] md:leading-[1.05] drop-shadow-2xl">
           <span className="block text-white/90">The Ultimate</span>
           <span className="block text-transparent bg-clip-text bg-gradient-to-r from-brand-400 via-emerald-300 to-brand-500 pb-2 drop-shadow-lg">
             Editor's Toolkit.

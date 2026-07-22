@@ -1,33 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ref, get, set } from "firebase/database";
-import { db, firestore } from "../../../utils/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { getDoc, doc, setDoc } from "firebase/firestore";
+import { firestore } from "../../../utils/firebase";
 
 export default function SettingsConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [toasts, setToasts] = useState<{ id: string; msg: string; type: "success" | "error" | "info" }[]>([]);
-  const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
-    const toastId = Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [...prev, { id: toastId, msg, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, 4000);
-  };
-
-  // Migration States
-  const [migrating, setMigrating] = useState(false);
-  const [migrationLogs, setMigrationLogs] = useState<string[]>([]);
-  const [migrationProgress, setMigrationProgress] = useState(0);
-
-  // Site Identity & Socials
+  // Site Identity
   const [discordUrl, setDiscordUrl] = useState("");
   const [qrCodeImageUrl, setQrCodeImageUrl] = useState("");
-  const [siteName1, setSiteName1] = useState("Harsh");
-  const [siteName2, setSiteName2] = useState("Edits");
+
+  // Section Order / Visibility (Default static list for UI layout matching)
+  const [sections, setSections] = useState([
+    { id: "adobeSoftware", icon: "🎨", title: "Adobe Software", sub: "Premium CC Apps", visible: true },
+    { id: "plugins", icon: "🔌", title: "Plugins", sub: "VFX & Editing Add-ons", visible: true },
+    { id: "scripts", icon: "📜", title: "Scripts & Extensions", sub: "Workflow Automation", visible: true },
+    { id: "assets", icon: "📦", title: "Assets", sub: "Overlays, LUTS, Sound FX", visible: true },
+    { id: "utilities", icon: "🛠️", title: "Utilities & Other Software", sub: "Essential Tools", visible: true },
+    { id: "courses", icon: "🎓", title: "Courses", sub: "Video Masterclasses", visible: true },
+    { id: "simplePluginsList", icon: "📋", title: "100+ Plugins List", sub: "Quick Downloads", visible: true },
+  ]);
 
   // Section Names
   const [adobeSoftwareName, setAdobeSoftwareName] = useState("");
@@ -38,7 +32,7 @@ export default function SettingsConfig() {
   const [coursesName, setCoursesName] = useState("");
   const [simplePluginsName, setSimplePluginsName] = useState("");
 
-  // Site Hero & Announcement Text
+  // Site Text
   const [heroTitle1, setHeroTitle1] = useState("");
   const [heroTitle2, setHeroTitle2] = useState("");
   const [heroDescription, setHeroDescription] = useState("");
@@ -49,10 +43,25 @@ export default function SettingsConfig() {
   const [missingResourceTitle, setMissingResourceTitle] = useState("");
   const [missingResourceDescription, setMissingResourceDescription] = useState("");
 
-  // Pricing & Credentials
+  // Pricing
   const [proPrice, setProPrice] = useState(10);
   const [proPriceUSD, setProPriceUSD] = useState(0.99);
   const [rzpKey, setRzpKey] = useState("");
+
+  // Auth Settings
+  const [authForgotTitle, setAuthForgotTitle] = useState("");
+  const [authForgotMessage, setAuthForgotMessage] = useState("");
+  const [authForgotBtnText, setAuthForgotBtnText] = useState("");
+  const [authForgotBtnUrl, setAuthForgotBtnUrl] = useState("");
+
+  const [toasts, setToasts] = useState<{ id: string; msg: string; type: "success" | "error" | "info" }[]>([]);
+  const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
+    const toastId = Math.random().toString(36).substr(2, 9);
+    setToasts((prev) => [...prev, { id: toastId, msg, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== toastId));
+    }, 4000);
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -60,14 +69,10 @@ export default function SettingsConfig() {
       const snap = await getDoc(doc(firestore, "settings", "globalConfig"));
       if (snap.exists()) {
         const data = snap.data();
-
-        // Identity
+        
         setDiscordUrl(data.global?.discordUrl || "");
         setQrCodeImageUrl(data.global?.qrCodeImageUrl || "");
-        setSiteName1(data.global?.siteName1 || "Harsh");
-        setSiteName2(data.global?.siteName2 || "Edits");
 
-        // Section Labels
         const names = data.sectionNames || {};
         setAdobeSoftwareName(names.adobeSoftware || "");
         setPluginsName(names.plugins || "");
@@ -77,7 +82,6 @@ export default function SettingsConfig() {
         setCoursesName(names.courses || "");
         setSimplePluginsName(names.simplePluginsList || "");
 
-        // Site text
         const text = data.siteText || {};
         setHeroTitle1(text.heroTitle1 || "");
         setHeroTitle2(text.heroTitle2 || "");
@@ -89,14 +93,19 @@ export default function SettingsConfig() {
         setMissingResourceTitle(text.missingResourceTitle || "");
         setMissingResourceDescription(text.missingResourceDescription || "");
 
-        // Pricing
         const pricing = data.pricing || {};
         setProPrice(pricing.proPrice || 10);
         setProPriceUSD(pricing.proPriceUSD || 0.99);
         setRzpKey(pricing.rzpKey || "");
+
+        const authSet = data.authSettings || {};
+        setAuthForgotTitle(authSet.forgotTitle || "");
+        setAuthForgotMessage(authSet.forgotMessage || "");
+        setAuthForgotBtnText(authSet.forgotBtnText || "");
+        setAuthForgotBtnUrl(authSet.forgotBtnUrl || "");
       }
     } catch (err) {
-      console.error("Failed to load settings:", err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -106,509 +115,365 @@ export default function SettingsConfig() {
     loadSettings();
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveIdentity = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-
     try {
-      const global = {
-        discordUrl,
-        qrCodeImageUrl,
-        siteName1,
-        siteName2,
-      };
-
-      const sectionNames = {
-        adobeSoftware: adobeSoftwareName,
-        plugins: pluginsName,
-        scripts: scriptsName,
-        assets: assetsName,
-        utilities: utilitiesName,
-        courses: coursesName,
-        simplePluginsList: simplePluginsName,
-      };
-
-      const siteText = {
-        heroTitle1,
-        heroTitle2,
-        heroDescription,
-        pluginsPackTitle,
-        pluginsPackDescription,
-        pluginsListTitle,
-        pluginsListDescription,
-        missingResourceTitle,
-        missingResourceDescription,
-      };
-
-      const pricing = {
-        proPrice,
-        proPriceUSD,
-        rzpKey,
-        currency: "INR",
-      };
-
       await setDoc(doc(firestore, "settings", "globalConfig"), {
-        global,
-        sectionNames,
-        siteText,
-        pricing
-      });
-
-      showToast("Branding and pricing configuration saved successfully!", "success");
+        global: { discordUrl, qrCodeImageUrl, siteName1: "Harsh", siteName2: "Edits" }
+      }, { merge: true });
+      showToast("Identity settings saved!", "success");
     } catch (err: any) {
-      console.error("Failed to save settings:", err);
-      showToast("Failed to save settings: " + err.message, "error");
+      showToast("Error saving: " + err.message, "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const addLog = (msg: string) => {
-    setMigrationLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  };
-
-  const handleMigrateToFirestore = async () => {
-    if (!window.confirm("Are you sure you want to migrate all data from Realtime Database to Cloud Firestore? This will overwrite matching documents in Firestore.")) {
-      return;
-    }
-    setMigrating(true);
-    setMigrationProgress(0);
-    setMigrationLogs([]);
-    addLog("Starting client-side database migration...");
-
+  const handleSaveContent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
     try {
-      // 1. Settings
-      addLog("Migrating global settings...");
-      const settingsSnap = await get(ref(db, "settings"));
-      if (settingsSnap.exists()) {
-        await setDoc(doc(firestore, "settings", "globalConfig"), settingsSnap.val());
-        addLog("✅ Global settings migrated successfully.");
-      }
-      setMigrationProgress(10);
-
-      // 2. Users
-      addLog("Fetching user profiles...");
-      const usersSnap = await get(ref(db, "users"));
-      if (usersSnap.exists()) {
-        const usersData = usersSnap.val();
-        const uids = Object.keys(usersData);
-        addLog(`Found ${uids.length} users to migrate.`);
-        for (let i = 0; i < uids.length; i++) {
-          const uid = uids[i];
-          const cleanProfile = JSON.parse(JSON.stringify(usersData[uid]));
-          try {
-            await setDoc(doc(firestore, "users", uid), cleanProfile);
-          } catch (err: any) {
-            addLog(`❌ Failed writing user [${uid}]: ${err.message}`);
-            throw err;
-          }
-        }
-        addLog(`✅ Migrated ${uids.length} user profiles.`);
-      }
-      setMigrationProgress(30);
-
-      // 3. Transactions
-      addLog("Fetching transaction history...");
-      const txSnap = await get(ref(db, "transactions"));
-      if (txSnap.exists()) {
-        const txData = txSnap.val();
-        const txIds = Object.keys(txData);
-        addLog(`Found ${txIds.length} transactions to migrate.`);
-        for (let i = 0; i < txIds.length; i++) {
-          const txId = txIds[i];
-          const cleanTx = JSON.parse(JSON.stringify(txData[txId]));
-          await setDoc(doc(firestore, "transactions", txId), cleanTx);
-        }
-        addLog(`✅ Migrated ${txIds.length} transaction records.`);
-      }
-      setMigrationProgress(50);
-
-      // 4. Products (Adobe Software, Plugins, Scripts, Creative Assets, Utilities, Video Courses, Lists)
-      const categories = [
-        "adobeSoftware",
-        "plugins",
-        "scripts",
-        "assets",
-        "utilities",
-        "courses",
-        "simplePluginsList"
-      ];
-      addLog("Fetching all product listings...");
-      let totalProducts = 0;
-      for (const cat of categories) {
-        addLog(`Migrating category: ${cat}...`);
-        const catSnap = await get(ref(db, cat));
-        if (catSnap.exists()) {
-          const items = catSnap.val();
-          const itemIds = Object.keys(items);
-          for (let i = 0; i < itemIds.length; i++) {
-            const itemId = itemIds[i];
-            const cleanItem = JSON.parse(JSON.stringify({
-              ...items[itemId],
-              Category: cat,
-              status: items[itemId].status || "approved"
-            }));
-            await setDoc(doc(firestore, "products", itemId), cleanItem);
-            totalProducts++;
-          }
-          addLog(`✅ Migrated ${itemIds.length} products from ${cat}.`);
-        }
-      }
-      addLog(`✅ Total products migrated: ${totalProducts}`);
-      setMigrationProgress(75);
-
-      // 5. Ratings, Messages, Broken Links, Audit Logs
-      addLog("Migrating feedback ratings...");
-      const ratingsSnap = await get(ref(db, "ratings"));
-      if (ratingsSnap.exists()) {
-        const ratingsData = ratingsSnap.val();
-        let ratingCount = 0;
-        for (const itemId in ratingsData) {
-          const versions = ratingsData[itemId];
-          for (const versionKey in versions) {
-            const versionNode = versions[versionKey];
-            for (const ratingId in versionNode) {
-              const rating = versionNode[ratingId];
-              const cleanRating = JSON.parse(JSON.stringify({
-                ...rating,
-                resourceId: itemId,
-                version: versionKey.replace(/_/g, ".")
-              }));
-              await setDoc(doc(firestore, "ratings", ratingId), cleanRating);
-              ratingCount++;
-            }
-          }
-        }
-        addLog(`✅ Migrated ${ratingCount} rating feedbacks.`);
-      }
-
-      addLog("Migrating broken link reports...");
-      const reportsSnap = await get(ref(db, "brokenLinkReports"));
-      if (reportsSnap.exists()) {
-        const reportsData = reportsSnap.val();
-        for (const reportId in reportsData) {
-          await setDoc(doc(firestore, "brokenLinkReports", reportId), JSON.parse(JSON.stringify(reportsData[reportId])));
-        }
-        addLog(`✅ Migrated broken link reports.`);
-      }
-
-      addLog("Migrating support messages...");
-      const msgSnap = await get(ref(db, "messageRequests"));
-      if (msgSnap.exists()) {
-        const msgData = msgSnap.val();
-        for (const msgId in msgData) {
-          await setDoc(doc(firestore, "userMessages", msgId), JSON.parse(JSON.stringify(msgData[msgId])));
-        }
-        addLog(`✅ Migrated support messages.`);
-      }
-
-      addLog("Migrating activity audit logs...");
-      const logsSnap = await get(ref(db, "auditLogs"));
-      if (logsSnap.exists()) {
-        const logsData = logsSnap.val();
-        for (const logId in logsData) {
-          await setDoc(doc(firestore, "auditLogs", logId), JSON.parse(JSON.stringify(logsData[logId])));
-        }
-        addLog(`✅ Migrated audit logs.`);
-      }
-
-      setMigrationProgress(100);
-      addLog("🎉 DATABASE MIGRATION TO FIRESTORE COMPLETED SUCCESSFULLY!");
-      alert("Database migrated successfully!");
+      await setDoc(doc(firestore, "settings", "globalConfig"), {
+        sectionNames: {
+          adobeSoftware: adobeSoftwareName,
+          plugins: pluginsName,
+          scripts: scriptsName,
+          assets: assetsName,
+          utilities: utilitiesName,
+          courses: coursesName,
+          simplePluginsList: simplePluginsName,
+        },
+        siteText: {
+          heroTitle1, heroTitle2, heroDescription,
+          pluginsPackTitle, pluginsPackDescription,
+          pluginsListTitle, pluginsListDescription,
+          missingResourceTitle, missingResourceDescription,
+        },
+        pricing: { proPrice, proPriceUSD, rzpKey, currency: "INR" }
+      }, { merge: true });
+      showToast("Content configuration saved!", "success");
     } catch (err: any) {
-      console.error(err);
-      addLog(`❌ Error: ${err.message}`);
-      alert("Migration failed: " + err.message);
+      showToast("Error saving: " + err.message, "error");
     } finally {
-      setMigrating(false);
+      setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-        <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
-        <p className="text-xs font-semibold">Loading system settings...</p>
-      </div>
-    );
-  }
+  const handleSaveAuth = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(firestore, "settings", "globalConfig"), {
+        authSettings: {
+          forgotTitle: authForgotTitle,
+          forgotMessage: authForgotMessage,
+          forgotBtnText: authForgotBtnText,
+          forgotBtnUrl: authForgotBtnUrl,
+        }
+      }, { merge: true });
+      showToast("Auth settings saved!", "success");
+    } catch (err: any) {
+      showToast("Error saving: " + err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSection = (id: string) => {
+    setSections(sections.map(s => s.id === id ? { ...s, visible: !s.visible } : s));
+  };
 
   return (
-    <div className="space-y-6 text-white animate-fade-in max-w-5xl">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Global Configurations</h2>
-        <p className="text-gray-400 text-xs mt-1">Configure pricing values, branding taglines, and category names</p>
+    <div className="w-full max-w-7xl mx-auto space-y-8">
+      
+      <div className="toast-container">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
+        ))}
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
-        {/* Section 1: Site Identity & Socials */}
-        <div className="glass-card p-6 rounded-2xl space-y-6">
-          <h3 className="text-sm font-bold text-indigo-400 border-b border-white/5 pb-2">
-            🎨 Branding & Identity Settings
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Site Brand Title Line 1</label>
-              <input
-                type="text"
-                value={siteName1}
-                onChange={(e) => setSiteName1(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
+      {/* Top Grid: settings & Order */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* Left Col: Links & Identity */}
+        <div className="glass-card p-8 border border-indigo-500/20 h-full">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
+              🔗
             </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Site Brand Title Line 2</label>
-              <input
-                type="text"
-                value={siteName2}
-                onChange={(e) => setSiteName2(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Discord Community Invite URL</label>
-              <input
-                type="url"
-                value={discordUrl}
-                onChange={(e) => setDiscordUrl(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">UPI QR Code Image Link (Optional)</label>
-              <input
-                type="url"
-                value={qrCodeImageUrl}
-                onChange={(e) => setQrCodeImageUrl(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
+            <div>
+              <h4 className="text-2xl font-bold text-white">Site Identity & Links</h4>
+              <p className="text-sm text-gray-400">Manage external links and QR code</p>
             </div>
           </div>
-        </div>
 
-        {/* Section 2: Premium Pricing */}
-        <div className="glass-card p-6 rounded-2xl space-y-6">
-          <h3 className="text-sm font-bold text-emerald-400 border-b border-white/5 pb-2">
-            💳 Premium Memberships Pricing
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Lifetime Pro Price (INR)</label>
-              <input
-                type="number"
-                value={proPrice}
-                onChange={(e) => setProPrice(Number(e.target.value))}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Lifetime Pro Price (USD)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={proPriceUSD}
-                onChange={(e) => setProPriceUSD(Number(e.target.value))}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Razorpay Key ID</label>
-              <input
-                type="text"
-                value={rzpKey}
-                onChange={(e) => setRzpKey(e.target.value)}
-                placeholder="rzp_live_..."
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 3: Custom Category Titles */}
-        <div className="glass-card p-6 rounded-2xl space-y-6">
-          <h3 className="text-sm font-bold text-blue-400 border-b border-white/5 pb-2">
-            🏷️ Category Section Names
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              { id: "adobeSoftware", label: "Adobe Software", state: adobeSoftwareName, set: setAdobeSoftwareName },
-              { id: "plugins", label: "After Effects Plugins", state: pluginsName, set: setPluginsName },
-              { id: "scripts", label: "Scripts & Extensions", state: scriptsName, set: setScriptsName },
-              { id: "assets", label: "Creative Assets", state: assetsName, set: setAssetsName },
-              { id: "utilities", label: "Utilities", state: utilitiesName, set: setUtilitiesName },
-              { id: "courses", label: "Video Courses", state: coursesName, set: setCoursesName },
-              { id: "simplePluginsList", label: "100+ Plugins List", state: simplePluginsName, set: setSimplePluginsName },
-            ].map((col) => (
-              <div key={col.id} className="space-y-2">
-                <label className="text-xs text-gray-400 font-bold">{col.label} Section Label</label>
-                <input
-                  type="text"
-                  value={col.state}
-                  onChange={(e) => col.set(e.target.value)}
-                  className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
+          <form onSubmit={handleSaveIdentity} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Discord Invite URL</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500">🎮</span>
+                </div>
+                <input 
+                  type="url" 
+                  placeholder="https://discord.gg/..." 
+                  value={discordUrl}
+                  onChange={(e) => setDiscordUrl(e.target.value)}
+                  className="w-full bg-gray-700/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none premium-transition" 
                 />
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Section 4: Site Hero & Announcement Taglines */}
-        <div className="glass-card p-6 rounded-2xl space-y-6">
-          <h3 className="text-sm font-bold text-purple-400 border-b border-white/5 pb-2">
-            📢 Homepage Taglines & Details Text
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Hero Title Line 1</label>
-              <input
-                type="text"
-                value={heroTitle1}
-                onChange={(e) => setHeroTitle1(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Hero Title Line 2</label>
-              <input
-                type="text"
-                value={heroTitle2}
-                onChange={(e) => setHeroTitle2(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs text-gray-400 font-bold">Hero Tagline Description details</label>
-            <input
-              type="text"
-              value={heroDescription}
-              onChange={(e) => setHeroDescription(e.target.value)}
-              className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-white/5">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Plugins Package Panel Header</label>
-              <input
-                type="text"
-                value={pluginsPackTitle}
-                onChange={(e) => setPluginsPackTitle(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Plugins Package Panel Details</label>
-              <input
-                type="text"
-                value={pluginsPackDescription}
-                onChange={(e) => setPluginsPackDescription(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">100+ Plugins Table Header</label>
-              <input
-                type="text"
-                value={pluginsListTitle}
-                onChange={(e) => setPluginsListTitle(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">100+ Plugins Table Details</label>
-              <input
-                type="text"
-                value={pluginsListDescription}
-                onChange={(e) => setPluginsListDescription(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Request Resource Section Header</label>
-              <input
-                type="text"
-                value={missingResourceTitle}
-                onChange={(e) => setMissingResourceTitle(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-bold">Request Resource Section Details</label>
-              <input
-                type="text"
-                value={missingResourceDescription}
-                onChange={(e) => setMissingResourceDescription(e.target.value)}
-                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Submit Actions */}
-        <div className="flex justify-end pt-4">
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-10 py-3.5 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
-          >
-            {saving ? "Saving Configuration..." : "Save Settings"}
-          </button>
-        </div>
-      </form>
-
-      {/* Database Migration Section */}
-      <div className="glass-card p-6 rounded-2xl mt-10 space-y-6 border border-amber-500/20 hover:border-amber-500/30 transition-all">
-        <h3 className="text-sm font-bold text-amber-400 border-b border-white/5 pb-2">
-          🗄️ Database Migration (RTDB to Cloud Firestore)
-        </h3>
-        <p className="text-gray-400 text-xs">
-          Use this tool to copy all user profiles, product listings, transaction logs, ratings, and support requests from the Firebase Realtime Database to the new Cloud Firestore instance. This is required for the Multi-Creator Marketplace upgrade.
-        </p>
-
-        {!migrating && migrationProgress === 0 ? (
-          <button
-            type="button"
-            onClick={handleMigrateToFirestore}
-            className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-6 py-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-amber-600/10"
-          >
-            Start Migration to Firestore
-          </button>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex justify-between text-xs font-bold text-gray-300">
-              <span>{migrating ? "Migration in progress..." : "Migration completed"}</span>
-              <span>{migrationProgress}%</span>
-            </div>
-            <div className="w-full bg-dark-900 h-2 rounded-full overflow-hidden border border-white/5">
-              <div
-                className="bg-amber-500 h-full transition-all duration-300"
-                style={{ width: `${migrationProgress}%` }}
-              ></div>
-            </div>
-            {migrationLogs.length > 0 && (
-              <div className="bg-black/40 border border-white/5 rounded-xl p-4 font-mono text-[10px] text-amber-350/90 h-48 overflow-y-auto space-y-1 custom-scrollbar">
-                {migrationLogs.map((log, index) => (
-                  <div key={index}>{log}</div>
-                ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">QR Code Image</label>
+              <div className="flex gap-2 mb-4">
+                <input 
+                  type="text" 
+                  className="flex-1 bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" 
+                  placeholder="enter image URL or select from assets..."
+                  value={qrCodeImageUrl}
+                  onChange={(e) => setQrCodeImageUrl(e.target.value)}
+                />
+                <button type="button" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 rounded-lg transition-colors whitespace-nowrap flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                  Assets
+                </button>
               </div>
-            )}
+
+              {/* QR Preview Box */}
+              <div className="w-64 h-64 mx-auto bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-700 flex items-center justify-center overflow-hidden relative group hover:border-indigo-500 transition-colors">
+                {qrCodeImageUrl ? (
+                  <img src={qrCodeImageUrl} className="w-full h-full object-contain" alt="QR Preview" />
+                ) : (
+                  <div className="text-center text-gray-500">
+                    <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4c1 0 2 1 2 2v6c0 1-1 2-2 2H6c-1 0-2-1-2-2v-6c0-1 1-2 2-2h6z"></path>
+                    </svg>
+                    <span className="text-sm">QR Code Preview</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button type="submit" disabled={saving} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl premium-transition shadow-lg shadow-blue-500/20 transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {saving ? "Saving..." : "Save Identity Settings"}
+            </button>
+          </form>
+        </div>
+
+        {/* Right Col: Section Order */}
+        <div className="glass-card p-8 border border-purple-500/20 h-full flex flex-col">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-2xl shadow-lg">
+              🔀
+            </div>
+            <div>
+              <h4 className="text-2xl font-bold text-white">Section Order</h4>
+              <p className="text-sm text-gray-400">Drag items to rearrange homepage</p>
+            </div>
           </div>
-        )}
+
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-3">
+              {sections.map((sec) => (
+                <div key={sec.id} className="flex items-center gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-colors group cursor-move">
+                  <div className="text-gray-500 group-hover:text-purple-400 cursor-grab">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16"></path></svg>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-gray-700/50 flex items-center justify-center text-xl shadow-inner group-hover:bg-purple-500/20 transition-colors">
+                    {sec.icon}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="text-white font-bold text-sm leading-tight group-hover:text-purple-300 transition-colors">{sec.title}</h5>
+                    <p className="text-xs text-gray-400">{sec.sub}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={sec.visible} onChange={() => toggleSection(sec.id)} />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex gap-3">
+            <button className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 rounded-xl premium-transition shadow-lg flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Save Order</span>
+            </button>
+            <button className="bg-gray-700 hover:bg-gray-600 text-white font-bold px-4 rounded-xl transition-colors flex items-center justify-center">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Toast Notifier */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className={`px-4 py-3 rounded-xl text-xs font-bold shadow-lg animate-fade-in flex items-center gap-3 border ${
-            t.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-            t.type === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-            'bg-blue-500/10 text-blue-400 border-blue-500/20'
-          }`}>
-            <i className={`fa-solid ${t.type === 'success' ? 'fa-check-circle' : t.type === 'error' ? 'fa-triangle-exclamation' : 'fa-info-circle'}`}></i>
-            {t.msg}
+      {/* Bottom Row: Section Names & Site Text Config */}
+      <div className="glass-card p-8 border border-blue-500/20">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-2xl shadow-lg">📝</div>
+          <div>
+            <h4 className="text-2xl font-bold text-white">Content Configuration</h4>
+            <p className="text-sm text-gray-400">Manage section names and site text</p>
           </div>
-        ))}
+        </div>
+
+        <form onSubmit={handleSaveContent} className="space-y-8">
+          {/* Section Names */}
+          <div>
+            <h5 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-gray-700 pb-2">
+              Section Display Names
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Adobe Software</label>
+                <input type="text" placeholder="Adobe Software" value={adobeSoftwareName} onChange={e => setAdobeSoftwareName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Plugins</label>
+                <input type="text" placeholder="Plugins" value={pluginsName} onChange={e => setPluginsName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Scripts</label>
+                <input type="text" placeholder="Scripts & Extensions" value={scriptsName} onChange={e => setScriptsName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Assets</label>
+                <input type="text" placeholder="Assets" value={assetsName} onChange={e => setAssetsName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Utilities</label>
+                <input type="text" placeholder="Utilities" value={utilitiesName} onChange={e => setUtilitiesName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Courses</label>
+                <input type="text" placeholder="Courses" value={coursesName} onChange={e => setCoursesName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">100+ Plugins List</label>
+                <input type="text" placeholder="100+ Plugins List" value={simplePluginsName} onChange={e => setSimplePluginsName(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* Site Text */}
+          <div>
+            <h5 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-gray-700 pb-2">
+              Site Text Content
+            </h5>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <h6 className="text-sm font-bold text-indigo-400 mb-4 uppercase tracking-wider">Hero Section</h6>
+                <div className="space-y-3">
+                  <input type="text" placeholder="Title Line 1" value={heroTitle1} onChange={e => setHeroTitle1(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                  <input type="text" placeholder="Title Line 2" value={heroTitle2} onChange={e => setHeroTitle2(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                  <textarea rows={2} placeholder="Hero Description" value={heroDescription} onChange={e => setHeroDescription(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+                </div>
+              </div>
+
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <h6 className="text-sm font-bold text-purple-400 mb-4 uppercase tracking-wider">100+ Plugins Pack</h6>
+                <div className="space-y-3">
+                  <input type="text" placeholder="Title" value={pluginsPackTitle} onChange={e => setPluginsPackTitle(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                  <textarea rows={2} placeholder="Description" value={pluginsPackDescription} onChange={e => setPluginsPackDescription(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+                </div>
+              </div>
+
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <h6 className="text-sm font-bold text-blue-400 mb-4 uppercase tracking-wider">Plugins List Page</h6>
+                <div className="space-y-3">
+                  <input type="text" placeholder="Page Title" value={pluginsListTitle} onChange={e => setPluginsListTitle(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                  <textarea rows={2} placeholder="Description" value={pluginsListDescription} onChange={e => setPluginsListDescription(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+                </div>
+              </div>
+
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <h6 className="text-sm font-bold text-green-400 mb-4 uppercase tracking-wider">Missing Resource</h6>
+                <div className="space-y-3">
+                  <input type="text" placeholder="Title" value={missingResourceTitle} onChange={e => setMissingResourceTitle(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                  <textarea rows={2} placeholder="Description" value={missingResourceDescription} onChange={e => setMissingResourceDescription(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing Settings */}
+          <div className="mt-8 pt-8 border-t border-gray-700">
+            <h5 className="text-lg font-bold text-white mb-6 flex items-center gap-2 border-b border-gray-700 pb-2">
+              💰 Pricing & Payment Configuration
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Pro Access Price (INR)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                  <input type="number" placeholder="10" value={proPrice} onChange={e => setProPrice(Number(e.target.value))} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg pl-8 pr-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-bold" />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-widest">For Indian Visitors</p>
+              </div>
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Pro Access Price (USD)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                  <input type="number" placeholder="0.99" step="0.01" value={proPriceUSD} onChange={e => setProPriceUSD(Number(e.target.value))} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg pl-8 pr-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-bold" />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-widest">For Foreign Visitors</p>
+              </div>
+              <div className="bg-gray-800/20 p-5 rounded-xl border border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Razorpay Public Key</label>
+                <input type="text" placeholder="rzp_live_..." value={rzpKey} onChange={e => setRzpKey(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-widest">Live or Test Key</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4">
+            <button type="submit" disabled={saving} className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-8 rounded-xl premium-transition shadow-lg shadow-blue-500/20 transform hover:-translate-y-0.5 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {saving ? "Saving..." : "Save Content Configuration"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Authentication Settings */}
+      <div className="mt-8 pt-8 border-t border-gray-700">
+        <h3 className="text-2xl font-bold text-white mb-6">Authentication Settings (Auth Page)</h3>
+        <div className="glass-card p-6 border border-indigo-500/20">
+          <h5 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-gray-700 pb-2">
+            Forgot Password Modal
+          </h5>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Modal Title</label>
+              <input type="text" placeholder="e.g. Reset Password" value={authForgotTitle} onChange={e => setAuthForgotTitle(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Modal Message</label>
+              <textarea rows={3} placeholder="e.g. Please contact the administrator via WhatsApp to reset your password." value={authForgotMessage} onChange={e => setAuthForgotMessage(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"></textarea>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Wrapper Button Text</label>
+              <input type="text" placeholder="e.g. Contact Admin" value={authForgotBtnText} onChange={e => setAuthForgotBtnText(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Action Button URL</label>
+              <input type="text" placeholder="e.g. https://wa.me/..." value={authForgotBtnUrl} onChange={e => setAuthForgotBtnUrl(e.target.value)} className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+            </div>
+          </div>
+          <div className="flex justify-end pt-4">
+            <button type="button" onClick={handleSaveAuth} disabled={saving} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-6 rounded-lg premium-transition shadow-lg shadow-purple-500/20 transform hover:-translate-y-0.5">
+              {saving ? "Saving..." : "Save Auth Settings"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

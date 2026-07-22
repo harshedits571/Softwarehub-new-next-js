@@ -19,10 +19,12 @@ import AnalyticsTab from "./components/AnalyticsTab";
 import VendorAnalytics from "./components/VendorAnalytics";
 import CreatorCRM from "./components/CreatorCRM";
 import SettingsConfig from "./components/SettingsConfig";
+import SubAdminManager from "./components/SubAdminManager";
 import BannerManager from "./components/BannerManager";
 import RevenueUsers from "./components/RevenueUsers";
 import ProductApprovals from "./components/ProductApprovals";
 import FirebaseTelemetry from "./components/FirebaseTelemetry";
+import ScrollReveal from "../../components/ScrollReveal";
 
 export default function AdminRoutePage() {
   const { currentUser, userProfile, loading } = useAuth();
@@ -168,7 +170,12 @@ export default function AdminRoutePage() {
       case "driveImport":
         return <GDriveSync onImportFile={handleImportFile} />;
       case "siteSettings":
-        return <SettingsConfig />;
+        return (
+          <div className="space-y-12">
+            <SettingsConfig />
+            <SubAdminManager />
+          </div>
+        );
       default:
         return (
           <div className="py-20 text-center text-gray-500">
@@ -238,9 +245,9 @@ export default function AdminRoutePage() {
 
         {/* Scrollable content body */}
         <div className="flex-1 p-8 md:p-10 overflow-y-auto custom-scrollbar">
-          <div key={activeTab} className="animate-fade-in">
+          <ScrollReveal key={activeTab}>
             {renderActiveTabContent()}
-          </div>
+          </ScrollReveal>
         </div>
       </main>
     </div>

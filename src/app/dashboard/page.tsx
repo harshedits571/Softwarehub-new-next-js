@@ -228,12 +228,16 @@ export default function CustomerDashboard() {
           <div className="flex gap-6 border-t border-white/5 md:border-t-0 pt-4 md:pt-0 w-full md:w-auto justify-around">
             <div className="text-center">
               <span className="text-[10px] text-gray-500 block uppercase font-bold">Total Orders</span>
-              <span className="text-lg font-black text-white">{customerInfo?.ordersCount || orders.length}</span>
+              <span className="text-lg font-black text-white">{orders.length}</span>
             </div>
             <div className="text-center">
               <span className="text-[10px] text-gray-500 block uppercase font-bold">Approx Spent</span>
               <span className="text-lg font-black text-emerald-400">
-                {pricing.currency === "INR" ? `₹${customerInfo?.totalSpent || 0}` : `$${(customerInfo?.totalSpent || 0).toFixed(2)}`}
+                {(() => {
+                  const calculatedSpent = orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+                  const displaySpent = customerInfo?.totalSpent || calculatedSpent;
+                  return pricing.currency === "INR" ? `₹${displaySpent}` : `$${displaySpent.toFixed(2)}`;
+                })()}
               </span>
             </div>
           </div>

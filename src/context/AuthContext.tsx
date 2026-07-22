@@ -11,6 +11,7 @@ export interface UserProfile {
   joinedAt?: string;
   isPaid?: boolean;
   role?: string;
+  permissions?: Record<string, boolean>;
   isBanned?: boolean;
   avatarUrl?: string;
   isVerified?: boolean;
