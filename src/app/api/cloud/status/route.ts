@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getGatewayByKey, getGatewayByEmail, GatewayRecord } from "@/utils/cloudGatewayStore";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       gatewayData = getGatewayByEmail(email);
     }
 
-    // 2. Fallback to Firebase Admin if configured
+    // 2. Fallback to Firebase Admin by key
     if (!gatewayData && key) {
       try {
         const { adminFirestore } = await import("@/utils/firebase-admin");
@@ -50,8 +50,63 @@ export async function GET(req: NextRequest) {
             gatewayData = snap.data() as GatewayRecord;
           }
         }
-      } catch (e) {
-        // Ignore admin firestore lookup error
+      } catch (e) {}
+
+      if (!gatewayData) {
+        try {
+          const { firestore } = await import("@/utils/firebase");
+          const { doc, getDoc } = await import("firebase/firestore");
+          const cleanKey = String(key).trim().toUpperCase();
+          const snap = await getDoc(doc(firestore, "cloud_gateways", cleanKey));
+          if (snap.exists()) {
+            gatewayData = snap.data() as GatewayRecord;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 3. Fallback to Firebase Admin & Firestore by email
+    if (!gatewayData && email) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      try {
+        const { adminFirestore } = await import("@/utils/firebase-admin");
+        if (adminFirestore) {
+          const querySnap = await adminFirestore.collection("cloud_gateways").where("email", "==", cleanEmail).get();
+          if (!querySnap.empty) {
+            let bestDoc = querySnap.docs[0].data() as GatewayRecord;
+            let bestTime = bestDoc.lastHeartbeat ? new Date(bestDoc.lastHeartbeat).getTime() : 0;
+            for (const docSnap of querySnap.docs) {
+              const d = docSnap.data() as GatewayRecord;
+              const dTime = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : (d.updatedAt ? new Date(d.updatedAt).getTime() : 0);
+              if (dTime >= bestTime) {
+                bestDoc = d;
+                bestTime = dTime;
+              }
+            }
+            gatewayData = bestDoc;
+          }
+        }
+      } catch (e) {}
+
+      if (!gatewayData) {
+        try {
+          const { firestore } = await import("@/utils/firebase");
+          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const qSnap = await getDocs(query(collection(firestore, "cloud_gateways"), where("email", "==", cleanEmail)));
+          if (!qSnap.empty) {
+            let bestDoc = qSnap.docs[0].data() as GatewayRecord;
+            let bestTime = bestDoc.lastHeartbeat ? new Date(bestDoc.lastHeartbeat).getTime() : 0;
+            for (const docSnap of qSnap.docs) {
+              const d = docSnap.data() as GatewayRecord;
+              const dTime = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : (d.updatedAt ? new Date(d.updatedAt).getTime() : 0);
+              if (dTime >= bestTime) {
+                bestDoc = d;
+                bestTime = dTime;
+              }
+            }
+            gatewayData = bestDoc;
+          }
+        } catch (e) {}
       }
     }
 
@@ -59,7 +114,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "No active Personal Cloud registered for this license key yet. Please ensure your PC server is running.",
+          error: "No active Personal Cloud registered for this account yet. Please ensure your PC server is running.",
           isRegistered: false,
         },
         { status: 200, headers: corsHeaders }

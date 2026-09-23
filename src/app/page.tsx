@@ -12,6 +12,7 @@ import { BannerCarousel } from "../components/BannerCarousel";
 import { CatalogGrid } from "../components/CatalogGrid";
 import { ProductDrawer, ResourceItem } from "../components/ProductDrawer";
 import { CheckoutModal } from "../components/CheckoutModal";
+import { TrialModal } from "../components/TrialModal";
 import DownloadLimitModal from "../components/DownloadLimitModal";
 import { RatingModal } from "../components/RatingModal";
 import { BrokenLinkModal } from "../components/BrokenLinkModal";
@@ -47,6 +48,7 @@ export default function Dashboard() {
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState<{ id: string | null; title: string | null; amount: number } | null>(null);
+  const [isTrialOpen, setIsTrialOpen] = useState(false);
 
   const [isRatingOpen, setIsRatingOpen] = useState(false);
   const [ratingItem, setRatingItem] = useState<{ id: string; title: string; version: string } | null>(null);
@@ -756,6 +758,7 @@ export default function Dashboard() {
           {activeTab === "personal-cloud" && (
             <PersonalCloudView
               currency={pricing.currency}
+              onOpenTrial={() => setIsTrialOpen(true)}
               onBuyPro={(item) => {
                 setCheckoutItem({
                   id: item.id,
@@ -1032,6 +1035,24 @@ export default function Dashboard() {
           }}
         />
       )}
+
+      {/* 30-Day Free Trial Modal */}
+      <TrialModal
+        isOpen={isTrialOpen}
+        onClose={() => setIsTrialOpen(false)}
+        onOpenUpgrade={() => {
+          setIsTrialOpen(false);
+          setCheckoutItem({
+            id: "pro",
+            title: "Personal Cloud Pro - Lifetime License",
+            amount: pricing.currency === "INR" ? 999 : 19.99,
+          });
+          setIsCheckoutOpen(true);
+        }}
+        onAlert={(msg, title, type) => {
+          showToast(msg, type === "error" ? "error" : "info");
+        }}
+      />
 
       {/* Download Limit Modal */}
       <DownloadLimitModal

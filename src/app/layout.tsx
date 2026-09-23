@@ -30,6 +30,7 @@ export const metadata: Metadata = {
 
 import GlobalScrollReveal from "../components/GlobalScrollReveal";
 import VisitorTracker from "../components/VisitorTracker";
+import { FreeGiftClaimModal } from "../components/FreeGiftClaimModal";
 
 export default function RootLayout({
   children,
@@ -49,12 +50,13 @@ export default function RootLayout({
       <body className="font-sans min-h-full flex flex-col bg-[#0b0b10] text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white">
         <AuthProvider>
           {children}
+          <FreeGiftClaimModal />
         </AuthProvider>
         <GlobalScrollReveal />
         <VisitorTracker />
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
       </body>
     </html>

@@ -9,14 +9,28 @@ import {
   orderBy,
 } from "firebase/firestore";
 
-// Sub-tabs
-import OverviewTab from "./OverviewTab";
-import LeadsTab, { LeadRecord } from "./LeadsTab";
-import PricingTab from "./PricingTab";
-import CustomLinksTab, { CustomLinkRecord } from "./CustomLinksTab";
-import PaymentsTab, { PaymentRecord } from "./PaymentsTab";
-import LicensingTab, { LicenseRecord } from "./LicensingTab";
-import SoftwareUpdatesTab from "./SoftwareUpdatesTab";
+import dynamic from "next/dynamic";
+
+// Type imports only
+import type { LeadRecord } from "./LeadsTab";
+import type { CustomLinkRecord } from "./CustomLinksTab";
+import type { PaymentRecord } from "./PaymentsTab";
+import type { LicenseRecord } from "./LicensingTab";
+
+const SubTabLoading = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="w-7 h-7 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
+  </div>
+);
+
+// Dynamically imported sub-tabs (client-only lazy loading)
+const OverviewTab = dynamic(() => import("./OverviewTab"), { ssr: false, loading: SubTabLoading });
+const LeadsTab = dynamic(() => import("./LeadsTab"), { ssr: false, loading: SubTabLoading });
+const PricingTab = dynamic(() => import("./PricingTab"), { ssr: false, loading: SubTabLoading });
+const CustomLinksTab = dynamic(() => import("./CustomLinksTab"), { ssr: false, loading: SubTabLoading });
+const PaymentsTab = dynamic(() => import("./PaymentsTab"), { ssr: false, loading: SubTabLoading });
+const LicensingTab = dynamic(() => import("./LicensingTab"), { ssr: false, loading: SubTabLoading });
+const SoftwareUpdatesTab = dynamic(() => import("./SoftwareUpdatesTab"), { ssr: false, loading: SubTabLoading });
 
 export type PSTabType =
   | "overview"

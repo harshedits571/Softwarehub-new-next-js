@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Sidebar } from "../../components/Sidebar";
 import { PersonalCloudView } from "../../components/PersonalCloudView";
 import { CheckoutModal } from "../../components/CheckoutModal";
+import { TrialModal } from "../../components/TrialModal";
 import { useAuth } from "../../context/AuthContext";
 import { useCurrency } from "../../hooks/useCurrency";
 import { useRouter } from "next/navigation";
@@ -27,6 +28,7 @@ export default function PersonalCloudPage() {
   // Checkout Modal State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState<{ id: string | null; title: string | null; amount: number } | null>(null);
+  const [isTrialOpen, setIsTrialOpen] = useState(false);
 
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -96,6 +98,7 @@ export default function PersonalCloudPage() {
         {/* Personal Cloud Component View */}
         <PersonalCloudView
           currency={pricing.currency}
+          onOpenTrial={() => setIsTrialOpen(true)}
           onBuyPro={(item) => {
             setCheckoutItem({
               id: item.id,
@@ -127,6 +130,24 @@ export default function PersonalCloudPage() {
           }}
         />
       )}
+
+      {/* 30-Day Free Trial Modal */}
+      <TrialModal
+        isOpen={isTrialOpen}
+        onClose={() => setIsTrialOpen(false)}
+        onOpenUpgrade={() => {
+          setIsTrialOpen(false);
+          setCheckoutItem({
+            id: "pro",
+            title: "Personal Cloud Pro - Lifetime License",
+            amount: pricing.currency === "INR" ? 999 : 19.99,
+          });
+          setIsCheckoutOpen(true);
+        }}
+        onAlert={(msg, title, type) => {
+          showToast(msg, type === "error" ? "error" : "info");
+        }}
+      />
 
       {/* Toast Notifications */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">

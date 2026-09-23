@@ -6,26 +6,37 @@ import { useRouter } from "next/navigation";
 import { auth as firebaseAuth } from "../../utils/firebase";
 import { signOut } from "firebase/auth";
 
-// Components
+import dynamic from "next/dynamic";
+
+// Lightweight immediate shell component
 import AdminSidebar from "./components/AdminSidebar";
-import DashboardStats from "./components/DashboardStats";
-import ProductManager from "./components/ProductManager";
-import RatingManager from "./components/RatingManager";
-import AuditLogs from "./components/AuditLogs";
-import GDriveSync from "./components/GDriveSync";
-import BrokenLinks from "./components/BrokenLinks";
-import UserMessages from "./components/UserMessages";
-import AnalyticsTab from "./components/AnalyticsTab";
-import VendorAnalytics from "./components/VendorAnalytics";
-import CreatorCRM from "./components/CreatorCRM";
-import SettingsConfig from "./components/SettingsConfig";
-import SubAdminManager from "./components/SubAdminManager";
-import BannerManager from "./components/BannerManager";
-import RevenueUsers from "./components/RevenueUsers";
-import ProductApprovals from "./components/ProductApprovals";
-import FirebaseTelemetry from "./components/FirebaseTelemetry";
+
+// Tab Loading Placeholder
+const TabLoading = () => (
+  <div className="flex items-center justify-center py-24">
+    <div className="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
+  </div>
+);
+
+// Dynamically imported tabs (compiled on-demand on client only when selected, skipping server compile)
+const DashboardStats = dynamic(() => import("./components/DashboardStats"), { ssr: false, loading: TabLoading });
+const ProductManager = dynamic(() => import("./components/ProductManager"), { ssr: false, loading: TabLoading });
+const RatingManager = dynamic(() => import("./components/RatingManager"), { ssr: false, loading: TabLoading });
+const AuditLogs = dynamic(() => import("./components/AuditLogs"), { ssr: false, loading: TabLoading });
+const GDriveSync = dynamic(() => import("./components/GDriveSync"), { ssr: false, loading: TabLoading });
+const BrokenLinks = dynamic(() => import("./components/BrokenLinks"), { ssr: false, loading: TabLoading });
+const UserMessages = dynamic(() => import("./components/UserMessages"), { ssr: false, loading: TabLoading });
+const AnalyticsTab = dynamic(() => import("./components/AnalyticsTab"), { ssr: false, loading: TabLoading });
+const VendorAnalytics = dynamic(() => import("./components/VendorAnalytics"), { ssr: false, loading: TabLoading });
+const CreatorCRM = dynamic(() => import("./components/CreatorCRM"), { ssr: false, loading: TabLoading });
+const SettingsConfig = dynamic(() => import("./components/SettingsConfig"), { ssr: false, loading: TabLoading });
+const SubAdminManager = dynamic(() => import("./components/SubAdminManager"), { ssr: false, loading: TabLoading });
+const BannerManager = dynamic(() => import("./components/BannerManager"), { ssr: false, loading: TabLoading });
+const RevenueUsers = dynamic(() => import("./components/RevenueUsers"), { ssr: false, loading: TabLoading });
+const ProductApprovals = dynamic(() => import("./components/ProductApprovals"), { ssr: false, loading: TabLoading });
+const FirebaseTelemetry = dynamic(() => import("./components/FirebaseTelemetry"), { ssr: false, loading: TabLoading });
+const PersonalStorageDashboard = dynamic(() => import("./components/personal-storage/PersonalStorageDashboard"), { ssr: false, loading: TabLoading });
 import ScrollReveal from "../../components/ScrollReveal";
-import PersonalStorageDashboard from "./components/personal-storage/PersonalStorageDashboard";
 
 export default function AdminRoutePage() {
   const { currentUser, userProfile, loading } = useAuth();

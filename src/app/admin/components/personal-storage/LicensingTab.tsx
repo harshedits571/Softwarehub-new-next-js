@@ -24,7 +24,11 @@ export interface LicenseRecord {
   customerName: string;
   customerEmail: string;
   plan: "starter" | "pro" | "family" | string;
-  status: "active" | "inactive" | "suspended" | "expired";
+  status: "active" | "inactive" | "suspended" | "expired" | "unclaimed";
+  claimStatus?: "unclaimed" | "claimed";
+  isGift?: boolean;
+  claimed?: boolean;
+  giftNote?: string;
   issueDate: any;
   expiryDate?: any;
   maxMachines: number;
@@ -57,6 +61,8 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
   const [genMaxMachines, setGenMaxMachines] = useState(1);
   const [genExpiry, setGenExpiry] = useState("lifetime");
   const [genCustomDate, setGenCustomDate] = useState("");
+  const [genIsGift, setGenIsGift] = useState(true);
+  const [genNote, setGenNote] = useState("");
 
   // Helpers
   const formatDate = (val: any) => {
@@ -122,13 +128,18 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
     setGenerating(true);
     try {
       const keyStr = generateKeyString();
+      const isGift = Boolean(genIsGift);
       const payload: LicenseRecord = {
         id: keyStr,
         key: keyStr,
         customerName: genName.trim(),
         customerEmail: genEmail.trim().toLowerCase(),
         plan: genPlan,
-        status: "active",
+        status: isGift ? "unclaimed" : "active",
+        claimStatus: isGift ? "unclaimed" : "claimed",
+        isGift: isGift,
+        claimed: !isGift,
+        giftNote: genNote.trim() || (isGift ? "Complimentary Free Grant" : "Direct Admin Generation"),
         maxMachines: Number(genMaxMachines),
         activatedMachines: 0,
         devices: [],
@@ -140,8 +151,13 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
       setShowGenModal(false);
       setGenName("");
       setGenEmail("");
+      setGenNote("");
       if (onRefresh) onRefresh();
-      alert(`License generated successfully!\nKey: ${keyStr}`);
+      if (isGift) {
+        alert(`🎁 Free Gift License Created Successfully!\n\nCustomer: ${genName.trim()}\nEmail: ${genEmail.trim().toLowerCase()}\nPlan: ${genPlan.toUpperCase()}\nKey: ${keyStr}\n\nWhen this user logs into SoftwareHubs, a center popup will appear allowing them to claim their Personal Cloud license for free without paying!\n\nNote: They can redeem this grant only once.`);
+      } else {
+        alert(`License generated successfully!\nKey: ${keyStr}`);
+      }
     } catch (err: any) {
       alert("Error generating license: " + err.message);
     } finally {
@@ -418,22 +434,34 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
 
                       {/* Status */}
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                            lic.status === "active"
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : lic.status === "suspended"
-                              ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                              : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          }`}
-                        >
+                        {lic.claimStatus === "unclaimed" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                            🎁 Unclaimed Gift
+                          </span>
+                        ) : lic.claimed ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            ✅ Claimed (Active)
+                          </span>
+                        ) : (
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              lic.status === "active" ? "bg-emerald-400" : "bg-rose-400"
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              lic.status === "active"
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : lic.status === "suspended"
+                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                             }`}
-                          ></span>
-                          {lic.status}
-                        </span>
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                lic.status === "active" ? "bg-emerald-400" : "bg-rose-400"
+                              }`}
+                            ></span>
+                            {lic.status}
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -668,6 +696,58 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
                     className="w-full bg-[#0a0d14] text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-cyan-500"
                   />
                 )}
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Grant Type</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setGenIsGift(true)}
+                    className={`p-2.5 rounded-lg border text-left transition ${
+                      genIsGift
+                        ? "bg-amber-500/10 border-amber-500/50 text-amber-300"
+                        : "bg-[#0a0d14] border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-xs">
+                      <span>🎁</span>
+                      <span>Free Gift Grant</span>
+                    </div>
+                    <div className="text-[10px] opacity-75 mt-0.5">
+                      User gets free claim popup on login (₹0)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setGenIsGift(false)}
+                    className={`p-2.5 rounded-lg border text-left transition ${
+                      !genIsGift
+                        ? "bg-cyan-500/10 border-cyan-500/50 text-cyan-300"
+                        : "bg-[#0a0d14] border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-xs">
+                      <span>🔑</span>
+                      <span>Direct Active Key</span>
+                    </div>
+                    <div className="text-[10px] opacity-75 mt-0.5">
+                      Pre-activated standalone license key
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Grant Note / Promotion Purpose (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Free gift for friend, influencer promotion, beta tester"
+                  value={genNote}
+                  onChange={(e) => setGenNote(e.target.value)}
+                  className="w-full bg-[#0a0d14] text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-cyan-500 mb-3"
+                />
               </div>
 
               <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">

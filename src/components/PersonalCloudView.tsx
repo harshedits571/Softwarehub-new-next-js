@@ -7,12 +7,14 @@ import ScrollReveal from "./ScrollReveal";
 interface PersonalCloudViewProps {
   currency: "INR" | "USD";
   onBuyPro: (item: { id: string; title: string; amount: number }) => void;
+  onOpenTrial?: () => void;
   onToast: (msg: string, type: "success" | "error" | "info") => void;
 }
 
 export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
   currency,
   onBuyPro,
+  onOpenTrial,
   onToast,
 }) => {
   // Demo State
@@ -26,6 +28,25 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
 
   // Pricing plans exactly from website/src/components/Pricing.js
   const plans = [
+    {
+      id: "trial",
+      name: "30-Day Free Trial",
+      price: 0,
+      originalPrice: currency === "INR" ? 499 : 9.99,
+      popular: false,
+      isTrial: true,
+      description: "Full-featured access on 1 PC. Zero commitment, no payment details required.",
+      features: [
+        "Full 30-Day Unlimited Access",
+        "1 PC Server Node",
+        "High-Speed Remote File Access",
+        "4K Movie & Media Streaming",
+        "End-to-End Encrypted Tunnel",
+        "Upgrade to Lifetime anytime"
+      ],
+      cta: "Start 30-Day Free Trial",
+    },
+    
     {
       id: "starter",
       name: "Starter Edition",
@@ -255,29 +276,29 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
           {/* Dual CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <button
-              onClick={() => onBuyPro({ id: "pro", title: "Personal Cloud Pro Security Edition - Lifetime License", amount: currency === "INR" ? 999 : 19.99 })}
-              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_30px_rgba(59,130,246,0.4)] hover:shadow-[0_0_40px_rgba(59,130,246,0.6)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-white/10"
+              onClick={() => onOpenTrial && onOpenTrial()}
+              className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_35px_rgba(6,182,212,0.45)] hover:shadow-[0_0_45px_rgba(6,182,212,0.65)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-cyan-400/30"
             >
-              <i className="fa-solid fa-crown text-yellow-300"></i>
-              <span>Buy Lifetime License — {currency === "INR" ? "₹999" : "$19.99"}</span>
+              <i className="fa-solid fa-bolt text-yellow-300"></i>
+              <span>Start 30-Day Free Trial (₹0)</span>
               <i className="fa-solid fa-arrow-right text-xs"></i>
+            </button>
+
+            <button
+              onClick={() => onBuyPro({ id: "pro", title: "Personal Cloud Pro Security Edition - Lifetime License", amount: currency === "INR" ? 999 : 19.99 })}
+              className="w-full sm:w-auto bg-[#141422] hover:bg-[#1c1c30] text-white font-bold px-7 py-4 rounded-xl transition-all border border-white/10 hover:border-white/20 active:scale-95 flex items-center justify-center gap-2.5 text-sm md:text-base shadow-xl"
+            >
+              <i className="fa-solid fa-crown text-yellow-400"></i>
+              <span>Get Lifetime Access — {currency === "INR" ? "₹999" : "$19.99"}</span>
             </button>
 
             <a
               href="#demo"
-              className="w-full sm:w-auto bg-[#141422] hover:bg-[#1c1c30] text-white font-bold px-7 py-4 rounded-xl transition-all border border-white/10 hover:border-white/20 active:scale-95 flex items-center justify-center gap-2.5 text-sm md:text-base shadow-xl"
-            >
-              <i className="fa-solid fa-play text-brand-400"></i>
-              <span>Try Interactive Demo</span>
-            </a>
-
-            <button
-              onClick={handleDownload}
               className="w-full sm:w-auto text-gray-400 hover:text-white font-semibold px-5 py-4 rounded-xl transition-colors text-xs flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-download text-brand-400"></i>
-              <span>Download Pro Setup (.exe)</span>
-            </button>
+              <i className="fa-solid fa-play text-brand-400"></i>
+              <span>Interactive Demo</span>
+            </a>
           </div>
 
           {/* Real-world Feature Pills */}
@@ -493,7 +514,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                       </button>
                     ))}
                   </div>
-                  <span className="text-[10px] text-gray-400 font-mono">D:\\Movies\\</span>
+                  <span className="text-[10px] text-gray-400 font-mono" suppressHydrationWarning>{`${activeDrive}:\\Movies\\`}</span>
                 </div>
 
                 {/* Simulated Video Player */}
@@ -794,7 +815,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
               </div>
 
               <button
-                onClick={() => onBuyPro({ id: plan.id, title: `Personal Cloud - ${plan.name}`, amount: plan.price })}
+                onClick={() => (plan as any).isTrial ? (onOpenTrial && onOpenTrial()) : onBuyPro({ id: plan.id, title: `Personal Cloud - ${plan.name}`, amount: plan.price })}
                 className={`w-full py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
                   plan.popular
                     ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30"
