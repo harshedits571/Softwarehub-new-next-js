@@ -1,4 +1,4 @@
-﻿import fs from "fs";
+import fs from "fs";
 import path from "path";
 
 export interface GatewayRecord {
@@ -76,6 +76,16 @@ function saveToDisk() {
 loadFromDisk();
 
 export function setGatewayRecord(record: GatewayRecord) {
+  loadFromDisk();
+  // Key by licenseKey, but if email is present, remove old stale records for this email under different keys
+  if (record.email) {
+    const cleanEmail = record.email.toLowerCase().trim();
+    for (const [key, item] of gatewayMap.entries()) {
+      if (item.email && item.email.toLowerCase().trim() === cleanEmail && key !== record.licenseKey.toUpperCase()) {
+        gatewayMap.delete(key);
+      }
+    }
+  }
   gatewayMap.set(record.licenseKey.toUpperCase(), record);
   saveToDisk();
 }
@@ -88,10 +98,21 @@ export function getGatewayByKey(key: string): GatewayRecord | null {
 export function getGatewayByEmail(email: string): GatewayRecord | null {
   loadFromDisk();
   const cleanEmail = email.toLowerCase().trim();
+  let latestMatch: GatewayRecord | null = null;
+  let latestTime = 0;
+
   for (const item of gatewayMap.values()) {
     if (item.email && item.email.toLowerCase().trim() === cleanEmail) {
-      return item;
+      const itemTime = item.lastHeartbeat
+        ? new Date(item.lastHeartbeat).getTime()
+        : item.updatedAt
+        ? new Date(item.updatedAt).getTime()
+        : 0;
+      if (!latestMatch || itemTime >= latestTime) {
+        latestMatch = item;
+        latestTime = itemTime;
+      }
     }
   }
-  return null;
+  return latestMatch;
 }
