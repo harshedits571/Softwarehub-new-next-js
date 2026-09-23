@@ -1,8 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { adminFirestore } from "../../../../utils/firebase-admin";
-import { firestore } from "../../../../utils/firebase";
-import { doc, setDoc } from "firebase/firestore";
-import { setGatewayRecord, GatewayRecord } from "../../../../utils/cloudGatewayStore";
+import { setGatewayRecord, GatewayRecord } from "@/utils/cloudGatewayStore";
 
 export const dynamic = "force-dynamic";
 
@@ -52,15 +49,17 @@ export async function POST(req: NextRequest) {
     setGatewayRecord(gatewayPayload);
 
     // 2. Best-effort Firestore sync in background
-    if (adminFirestore) {
-      adminFirestore
-        .collection("cloud_gateways")
-        .doc(cleanKey)
-        .set(gatewayPayload, { merge: true })
-        .catch((e: any) => console.warn("adminFirestore cloud_gateways sync warning:", e?.message));
-    } else {
-      const docRef = doc(firestore, "cloud_gateways", cleanKey);
-      setDoc(docRef, gatewayPayload, { merge: true }).catch(() => {});
+    try {
+      const { adminFirestore } = await import("@/utils/firebase-admin");
+      if (adminFirestore) {
+        adminFirestore
+          .collection("cloud_gateways")
+          .doc(cleanKey)
+          .set(gatewayPayload, { merge: true })
+          .catch((e: any) => console.warn("adminFirestore cloud_gateways sync warning:", e?.message));
+      }
+    } catch (e) {
+      // Ignore background firestore error
     }
 
     return NextResponse.json(

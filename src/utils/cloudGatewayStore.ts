@@ -13,7 +13,7 @@ export interface GatewayRecord {
   updatedAt: string;
 }
 
-// Global in-memory cache surviving hot reloads
+// Global in-memory cache surviving hot reloads and serverless invocations
 const globalForGateways = global as unknown as {
   __cloudGatewaysCache?: Map<string, GatewayRecord>;
 };
@@ -24,11 +24,19 @@ if (!globalForGateways.__cloudGatewaysCache) {
 }
 
 function getStoragePath(): string {
-  const localDataDir = path.join(process.cwd(), "data");
-  if (fs.existsSync(localDataDir)) {
-    return path.join(localDataDir, "cloud_gateways.json");
+  // Use /tmp which is writable on Vercel serverless functions, Linux, and Windows
+  if (process.platform === "win32") {
+    const localData = path.join(process.cwd(), "data");
+    try {
+      if (!fs.existsSync(localData)) {
+        fs.mkdirSync(localData, { recursive: true });
+      }
+      return path.join(localData, "cloud_gateways.json");
+    } catch (e) {
+      return path.join(process.env.TEMP || "C:\\Windows\\Temp", "cloud_gateways.json");
+    }
   }
-  return path.join("/tmp", "cloud_gateways.json");
+  return "/tmp/cloud_gateways.json";
 }
 
 function loadFromDisk() {
@@ -39,7 +47,9 @@ function loadFromDisk() {
       const list: GatewayRecord[] = JSON.parse(raw);
       if (Array.isArray(list)) {
         list.forEach((item) => {
-          if (item.licenseKey) gatewayMap.set(item.licenseKey.toUpperCase(), item);
+          if (item && item.licenseKey) {
+            gatewayMap.set(item.licenseKey.toUpperCase(), item);
+          }
         });
       }
     }
@@ -58,7 +68,7 @@ function saveToDisk() {
     const list = Array.from(gatewayMap.values());
     fs.writeFileSync(file, JSON.stringify(list, null, 2), "utf8");
   } catch (e) {
-    // Ignore write errors
+    // Ignore write errors (e.g. read-only environments)
   }
 }
 

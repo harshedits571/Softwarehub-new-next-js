@@ -1,8 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { adminFirestore } from "../../../../utils/firebase-admin";
-import { firestore } from "../../../../utils/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { getGatewayByKey, getGatewayByEmail, GatewayRecord } from "../../../../utils/cloudGatewayStore";
+import { getGatewayByKey, getGatewayByEmail, GatewayRecord } from "@/utils/cloudGatewayStore";
 
 export const dynamic = "force-dynamic";
 
@@ -42,37 +39,30 @@ export async function GET(req: NextRequest) {
       gatewayData = getGatewayByEmail(email);
     }
 
-    // 2. Fallback to adminFirestore
-    if (!gatewayData && key && adminFirestore) {
-      try {
-        const cleanKey = String(key).trim().toUpperCase();
-        const snap = await adminFirestore.collection("cloud_gateways").doc(cleanKey).get();
-        if (snap.exists) {
-          gatewayData = snap.data() as GatewayRecord;
-        }
-      } catch (e) {}
-    }
-
-    // 3. Fallback to client firestore
+    // 2. Fallback to Firebase Admin if configured
     if (!gatewayData && key) {
       try {
-        const cleanKey = String(key).trim().toUpperCase();
-        const docRef = doc(firestore, "cloud_gateways", cleanKey);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          gatewayData = snap.data() as GatewayRecord;
+        const { adminFirestore } = await import("@/utils/firebase-admin");
+        if (adminFirestore) {
+          const cleanKey = String(key).trim().toUpperCase();
+          const snap = await adminFirestore.collection("cloud_gateways").doc(cleanKey).get();
+          if (snap && snap.exists) {
+            gatewayData = snap.data() as GatewayRecord;
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        // Ignore admin firestore lookup error
+      }
     }
 
     if (!gatewayData) {
       return NextResponse.json(
         {
           success: false,
-          error: "No active Personal Cloud registered for this license key.",
+          error: "No active Personal Cloud registered for this license key yet. Please ensure your PC server is running.",
           isRegistered: false,
         },
-        { status: 404, headers: corsHeaders }
+        { status: 200, headers: corsHeaders }
       );
     }
 
@@ -105,8 +95,8 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error("Cloud status error:", err);
     return NextResponse.json(
-      { success: false, error: err?.message || "Failed to check cloud status" },
-      { status: 500, headers: corsHeaders }
+      { success: false, error: err?.message || "Failed to check cloud status", isRegistered: false },
+      { status: 200, headers: corsHeaders }
     );
   }
 }
