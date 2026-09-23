@@ -6,6 +6,7 @@ import { firestore } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../hooks/useCurrency";
 import { Sidebar } from "../components/Sidebar";
+import { PersonalCloudView } from "../components/PersonalCloudView";
 import { Hero } from "../components/Hero";
 import { BannerCarousel } from "../components/BannerCarousel";
 import { CatalogGrid } from "../components/CatalogGrid";
@@ -749,6 +750,22 @@ export default function Dashboard() {
                 )}
               </ScrollReveal>
             </div>
+          )}
+
+          {/* Personal Cloud Section */}
+          {activeTab === "personal-cloud" && (
+            <PersonalCloudView
+              currency={pricing.currency}
+              onBuyPro={(item) => {
+                setCheckoutItem({
+                  id: item.id,
+                  title: item.title,
+                  amount: item.amount,
+                });
+                setIsCheckoutOpen(true);
+              }}
+              onToast={showToast}
+            />
           )}
 
           {/* Favorites view */}

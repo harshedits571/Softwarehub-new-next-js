@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { doc, collection, getDoc, updateDoc, addDoc, Timestamp } from "firebase/firestore";
+import { doc, collection, getDoc, updateDoc, setDoc, addDoc, Timestamp } from "firebase/firestore";
 import { firestore } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 
@@ -57,6 +57,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [creatorRzpAccount, setCreatorRzpAccount] = useState<string | null>(null);
+  const [purchasedLicense, setPurchasedLicense] = useState<{
+    key: string;
+    email: string;
+    plan: string;
+    maxMachines: number;
+  } | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -117,11 +124,60 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     const description = itemId ? `Access to: ${itemTitle}` : "Lifetime Pro Access Bundle";
 
+    // Plan determination
+    const isPersonalCloud =
+      String(itemId || itemTitle).toLowerCase().includes("personal") ||
+      String(itemId || itemTitle).toLowerCase().includes("starter") ||
+      String(itemId || itemTitle).toLowerCase().includes("pro") ||
+      String(itemId || itemTitle).toLowerCase().includes("family");
+
+    const planType = String(itemId || itemTitle).toLowerCase().includes("family")
+      ? "family"
+      : String(itemId || itemTitle).toLowerCase().includes("starter")
+      ? "starter"
+      : "pro";
+
+    const userEmail = (email || currentUser.email || "").toLowerCase().trim();
+    const customerPhone = countryCode + phone;
+    const cleanLeadId = userEmail.replace(/[^a-zA-Z0-9]/g, "_") || `lead_${Date.now()}`;
+    const leadRef = doc(firestore, "leads", cleanLeadId);
+
+    // 1. Requirement: Automatically mark lead as "Interested" when user clicks payment button
+    try {
+      await setDoc(
+        leadRef,
+        {
+          id: cleanLeadId,
+          name: name || currentUser.displayName || "Customer",
+          email: userEmail,
+          phone: customerPhone,
+          plan: planType,
+          leadStatus: "Interested",
+          paymentStatus: "Pending",
+          amountPaid: 0,
+          registrationDate: Timestamp.now(),
+          source: isPersonalCloud ? "Personal Cloud Checkout" : "SoftwareHubs Store",
+          activityHistory: [
+            {
+              action: "Clicked Proceed to Pay (Checkout Initiated)",
+              status: "Interested",
+              plan: planType,
+              amount: amount,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        { merge: true }
+      );
+    } catch (leadInitErr) {
+      console.warn("Could not save initial Interested lead state:", leadInitErr);
+    }
+
     try {
       const platformFee = amount * 0.1;
       const creatorShare = amount * 0.9;
 
-      // 1. Create order server-side (with Route transfer if creator product)
+      // 2. Create order server-side
       const orderRes = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,7 +186,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           currency: currency,
           productId: itemId || "PRO_BUNDLE",
           productTitle: itemTitle || "Lifetime Pro Access",
-          customerEmail: email || currentUser.email || "",
+          customerEmail: userEmail,
           customerName: name || currentUser.displayName || "",
           creatorLinkedAccountId: creatorRzpAccount || null,
           platformCommissionPercent: 10,
@@ -148,13 +204,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         amount: orderData.amount,
         currency: orderData.currency,
         order_id: orderData.id,
-        name: "SoftwhereHub",
+        name: "SoftwareHubs",
         description: description,
         image: "/assets/logo.png",
         handler: async function (response: any) {
           if (response.razorpay_payment_id) {
             try {
-              // 2. Verify payment signature
+              // 3. Verify payment signature
               const verifyRes = await fetch("/api/verify-payment", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -181,20 +237,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               if (itemId) {
                 updatedPurchased[itemId] = true;
               } else {
-                updatedPurchased["PRO_BUNDLE"] = true; // Pro Membership Token
+                updatedPurchased["PRO_BUNDLE"] = true;
               }
 
               await updateDoc(userDocRef, {
                 paymentId: paymentId,
                 paidAt: Timestamp.now(),
-                // isPaid is protected by firestore.rules, so we cannot update it here
-                purchased: updatedPurchased
+                purchased: updatedPurchased,
               });
 
+              // Add transaction record
               const transactionRef = collection(firestore, "transactions");
               await addDoc(transactionRef, {
                 uid: currentUser.uid,
-                email: currentUser.email || "N/A",
+                email: userEmail || "N/A",
                 userName: name || currentUser.displayName || "N/A",
                 amount: amount,
                 currency: currency,
@@ -212,13 +268,153 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 timestamp: Timestamp.now(),
               });
 
+              // Add audit log
               const logRef = collection(firestore, "auditLogs");
               await addDoc(logRef, {
                 type: "Payment",
-                user: currentUser.email || "N/A",
+                user: userEmail || "N/A",
                 detail: `Paid ${currency} ${amount} for ${itemTitle || "Lifetime Pro Access"}. split: platform ${platformFee}, creator ${creatorShare}`,
                 timestamp: Timestamp.now(),
               });
+
+              // Generate license key for Personal Cloud
+              const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+              const p = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+              const generatedKey = `PCLOUD-${p()}-${p()}-${p()}-${p()}`;
+              const maxMac = planType === "family" ? 5 : planType === "pro" ? 3 : 1;
+
+              // Write to licenses collection
+              try {
+                const licRef = doc(firestore, "licenses", generatedKey);
+                await setDoc(licRef, {
+                  id: generatedKey,
+                  key: generatedKey,
+                  licenseKey: generatedKey,
+                  customerEmail: userEmail,
+                  customerName: name || currentUser?.displayName || "Customer",
+                  plan: planType,
+                  maxMachines: maxMac,
+                  activatedMachines: 0,
+                  amount: amount,
+                  currency: currency,
+                  paymentId: paymentId,
+                  orderId: orderId || null,
+                  status: "active",
+                  issueDate: Timestamp.now(),
+                  createdAt: Timestamp.now(),
+                  expiryDate: "Lifetime",
+                  devices: [],
+                });
+
+                if (currentUser) {
+                  await updateDoc(userDocRef, {
+                    [`licenses.${generatedKey}`]: {
+                      licenseKey: generatedKey,
+                      plan: planType,
+                      createdAt: Date.now(),
+                    },
+                  });
+                }
+              } catch (licErr) {
+                console.error("Failed to write license to Firestore:", licErr);
+              }
+
+              // 4. Requirement: Once payment is successfully completed, automatically change lead status to "Verified"
+              try {
+                const leadSnap = await getDoc(leadRef);
+                const existingHistory = leadSnap.exists() && Array.isArray(leadSnap.data()?.activityHistory)
+                  ? leadSnap.data().activityHistory
+                  : [];
+
+                await setDoc(
+                  leadRef,
+                  {
+                    leadStatus: "Verified",
+                    paymentStatus: "Paid",
+                    purchaseDate: Timestamp.now(),
+                    amountPaid: amount,
+                    paymentId: paymentId,
+                    orderId: orderId || null,
+                    licenseKey: generatedKey,
+                    activityHistory: [
+                      ...existingHistory,
+                      {
+                        action: "Payment Verified via Razorpay",
+                        status: "Verified",
+                        paymentId: paymentId,
+                        orderId: orderId || null,
+                        amount: amount,
+                        licenseKey: generatedKey,
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                  },
+                  { merge: true }
+                );
+              } catch (leadUpdateErr) {
+                console.warn("Could not update lead status to Verified:", leadUpdateErr);
+              }
+
+              // 5. Requirement: Write payment to payments collection with invoice info
+              try {
+                const invNum = `INV-${paymentId.slice(-8).toUpperCase()}`;
+                await setDoc(doc(firestore, "payments", paymentId), {
+                  id: paymentId,
+                  paymentId: paymentId,
+                  orderId: orderId || null,
+                  customerName: name || currentUser.displayName || "Customer",
+                  customerEmail: userEmail,
+                  customerPhone: customerPhone,
+                  planId: planType,
+                  planName: `${planType.toUpperCase()} Plan`,
+                  amount: amount,
+                  currency: currency,
+                  gateway: "razorpay",
+                  gatewayStatus: "captured",
+                  transactionDate: Timestamp.now(),
+                  invoiceNumber: invNum,
+                  refundStatus: "none",
+                  licenseKey: generatedKey,
+                });
+              } catch (payDocErr) {
+                console.warn("Could not write payment to payments collection:", payDocErr);
+              }
+
+              // 6. Check for custom affiliate / promo link and update stats
+              try {
+                const refCode =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem("personal_cloud_ref") ||
+                      new URLSearchParams(window.location.search).get("ref") ||
+                      new URLSearchParams(window.location.search).get("code")
+                    : null;
+
+                if (refCode) {
+                  const linkDocRef = doc(firestore, "custom_links", refCode.toUpperCase());
+                  const linkSnap = await getDoc(linkDocRef);
+                  if (linkSnap.exists()) {
+                    const lData = linkSnap.data();
+                    await updateDoc(linkDocRef, {
+                      successfulPurchases: (lData.successfulPurchases || 0) + 1,
+                      currentRedemptions: (lData.currentRedemptions || 0) + 1,
+                      revenueGenerated: (lData.revenueGenerated || 0) + amount,
+                    });
+                  }
+                }
+              } catch (linkUpdateErr) {
+                console.warn("Could not update custom link stats:", linkUpdateErr);
+              }
+
+              if (isPersonalCloud) {
+                setPurchasedLicense({
+                  key: generatedKey,
+                  email: userEmail,
+                  plan: planType,
+                  maxMachines: maxMac,
+                });
+                onSuccess(paymentId);
+                return; // Don't close modal yet, show license key voucher!
+              }
 
               onSuccess(paymentId);
               onClose();
@@ -230,8 +426,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         },
         prefill: {
           name: name || currentUser.displayName || "",
-          email: email || currentUser.email || "",
-          contact: countryCode + phone,
+          email: userEmail,
+          contact: customerPhone,
         },
         theme: {
           color: "#4f46e5",
@@ -248,6 +444,78 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       onAlert(err.message || "Failed to initialize checkout.", "Error", "error");
     }
   };
+
+  if (purchasedLicense) {
+    return (
+      <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div className="bg-[#0e0e18] border-2 border-indigo-500/50 w-full max-w-lg rounded-3xl p-6 sm:p-8 relative shadow-2xl text-center">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-500/30">
+            <i className="fa-solid fa-circle-check"></i>
+          </div>
+
+          <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full mb-3 inline-block">
+            PAYMENT SUCCESSFUL • LICENSE READY
+          </span>
+
+          <h2 className="text-2xl font-black text-white mb-2">Personal Cloud License Activated</h2>
+          <p className="text-xs text-gray-400 mb-6">
+            Your license is registered in Firebase and ready for desktop login.
+          </p>
+
+          <div className="bg-[#141424] border border-white/10 rounded-2xl p-4 mb-5 text-left">
+            <div className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Your License Key:</div>
+            <div className="flex items-center justify-between bg-black/50 border border-indigo-500/30 rounded-xl px-4 py-3 mb-3">
+              <span className="font-mono text-base font-black text-indigo-300 tracking-wider">
+                {purchasedLicense.key}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(purchasedLicense.key);
+                  setCopiedKey(true);
+                  setTimeout(() => setCopiedKey(false), 2500);
+                }}
+                className="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+              >
+                {copiedKey ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-400 flex justify-between pt-2 border-t border-white/5">
+              <span>Registered Email:</span>
+              <strong className="text-white">{purchasedLicense.email}</strong>
+            </div>
+            <div className="text-xs text-gray-400 flex justify-between pt-1">
+              <span>Machine Activations:</span>
+              <strong className="text-emerald-400">{purchasedLicense.maxMachines} Windows PC</strong>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <a
+              href="/downloads/PersonalCloud-Pro-Setup.exe"
+              download="PersonalCloud-Pro-Setup.exe"
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-download"></i>
+              <span>Download PersonalCloud-Pro-Setup.exe</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPurchasedLicense(null);
+                onClose();
+              }}
+              className="w-full bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold py-2.5 rounded-xl transition-colors"
+            >
+              Done & Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 transition-opacity duration-300">
@@ -313,7 +581,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full bg-dark-900 border border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 outline-none transition-all shadow-sm text-sm"
+                className="w-full bg-[#0a0d14] border border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 outline-none transition-all shadow-sm text-sm"
                 placeholder="Enter your name"
               />
             </div>
@@ -325,14 +593,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full bg-dark-900 border border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 outline-none transition-all shadow-sm text-sm"
+                className="w-full bg-[#0a0d14] border border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 outline-none transition-all shadow-sm text-sm"
                 placeholder="john@example.com"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-2">Phone Number</label>
-              <div className="flex bg-dark-900 border border-white/10 focus-within:border-indigo-500 rounded-xl transition-all shadow-sm overflow-hidden">
+              <div className="flex bg-[#0a0d14] border border-white/10 focus-within:border-indigo-500 rounded-xl transition-all shadow-sm overflow-hidden">
                 <div className="flex items-center bg-white/5 border-r border-white/5 relative">
                   <select
                     value={countryCode}
@@ -340,7 +608,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     className="bg-transparent text-gray-400 text-sm font-medium outline-none px-3 py-3.5 appearance-none cursor-pointer hover:text-white transition-colors z-10 relative"
                   >
                     {COUNTRY_CODES.map((c) => (
-                      <option key={c.name + c.code} value={c.code} className="bg-dark-900 text-white">
+                      <option key={c.name + c.code} value={c.code} className="bg-[#0a0d14] text-white">
                         {c.code} {c.name}
                       </option>
                     ))}
@@ -360,7 +628,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.2)] hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] active:scale-[0.98] mt-4 flex justify-center items-center gap-2"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.2)] hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] active:scale-[0.98] mt-4 flex justify-center items-center gap-2 cursor-pointer"
             >
               <span>Pay {displayPrice} Securely</span>
               <i className="fa-solid fa-arrow-right text-xs"></i>

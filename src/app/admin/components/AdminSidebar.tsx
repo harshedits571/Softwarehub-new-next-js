@@ -25,6 +25,15 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "fa-solid fa-chart-line" },
+    {
+      id: "personalStorage",
+      label: "Personal Storage",
+      icon: "fa-solid fa-server text-cyan-400",
+      style: {
+        borderLeft: "2px solid #06b6d4",
+        background: "linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.08))",
+      },
+    },
     { id: "banners", label: "Banners", icon: "fa-solid fa-images" },
     { id: "adobeSoftware", label: "Adobe Software", icon: "fa-solid fa-compact-disc" },
     { id: "plugins", label: "Plugins", icon: "fa-solid fa-puzzle-piece" },
@@ -45,7 +54,7 @@ export default function AdminSidebar({
     { id: "siteSettings", label: "Settings", icon: "fa-solid fa-sliders" },
     {
       id: "analytics",
-      label: "📊 Analytics",
+      label: "dY\"S Analytics",
       icon: "fa-solid fa-chart-simple",
       style: {
         borderLeft: "2px solid rgba(34,197,94,0.3)",
@@ -63,7 +72,7 @@ export default function AdminSidebar({
     },
     {
       id: "driveImport",
-      label: "☁️ Google Drive Import",
+      label: "Google Drive Import",
       icon: "fa-solid fa-cloud-arrow-down text-indigo-400",
       style: {
         borderLeft: "2px solid rgba(99,102,241,0.3)",
@@ -106,6 +115,7 @@ export default function AdminSidebar({
           const visibleTabs = tabs.filter((tab) => {
             if (isSuperAdmin) return true;
             if (tab.id === "dashboard") return true;
+            if (tab.id === "personalStorage") return true;
             if (tab.id === "brokenLinks") return !!permissions.brokenLinkReports;
             return !!permissions[tab.id];
           });

@@ -25,6 +25,7 @@ import RevenueUsers from "./components/RevenueUsers";
 import ProductApprovals from "./components/ProductApprovals";
 import FirebaseTelemetry from "./components/FirebaseTelemetry";
 import ScrollReveal from "../../components/ScrollReveal";
+import PersonalStorageDashboard from "./components/personal-storage/PersonalStorageDashboard";
 
 export default function AdminRoutePage() {
   const { currentUser, userProfile, loading } = useAuth();
@@ -145,6 +146,8 @@ export default function AdminRoutePage() {
     switch (activeTab) {
       case "dashboard":
         return <DashboardStats setActiveTab={setActiveTab} isSuperAdmin={isSuperAdmin} />;
+      case "personalStorage":
+        return <PersonalStorageDashboard />;
       case "revenueDashboard":
         return <RevenueUsers />;
       case "productApprovals":
@@ -188,6 +191,7 @@ export default function AdminRoutePage() {
 
   const TAB_TITLES: Record<string, string> = {
     dashboard: "Dashboard Overview",
+    personalStorage: "Personal Storage Management",
     banners: "Highlights / Banners",
     adobeSoftware: "Adobe Software Items",
     plugins: "Plugins",

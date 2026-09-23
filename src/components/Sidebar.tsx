@@ -51,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems = [
     { id: "home", label: "Home", icon: "fa-solid fa-house" },
+    { id: "personal-cloud", label: "Personal Cloud", icon: "fa-solid fa-cloud-bolt", badge: "NEW" },
     { id: "software", label: "Software", icon: "fa-solid fa-layer-group" },
     { id: "plugins", label: "Plugins", icon: "fa-solid fa-puzzle-piece" },
     { id: "scripts", label: "Scripts", icon: "fa-solid fa-terminal" },
@@ -118,17 +119,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Nav Links */}
       <nav className="flex-1 space-y-1">
-        {menuItems.map((item) => (
-          <a
-            key={item.id}
-            href={`#${item.id}`}
-            onClick={(e) => handleTabClick(item.id, e)}
-            className={`sidebar-link ${activeTab === item.id ? "active" : ""}`}
-          >
-            <i className={`${item.icon} text-sm`}></i>
-            <span>{item.label}</span>
-          </a>
-        ))}
+        {menuItems.map((item) => {
+          const isPC = item.id === "personal-cloud";
+          const isActive = activeTab === item.id;
+          return (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={(e) => handleTabClick(item.id, e)}
+              className={`sidebar-link ${isActive ? "active" : ""} ${
+                isPC && !isActive ? "text-brand-300 font-semibold hover:text-white" : ""
+              } flex items-center justify-between group`}
+            >
+              <div className="flex items-center gap-3">
+                <i className={`${item.icon} text-sm ${isPC ? "text-brand-400 group-hover:rotate-12 transition-transform" : ""}`}></i>
+                <span>{item.label}</span>
+              </div>
+              {item.badge && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gradient-to-r from-brand-500/30 to-purple-500/30 text-brand-300 border border-brand-500/40 shadow-sm shadow-brand-500/10">
+                  {item.badge}
+                </span>
+              )}
+            </a>
+          );
+        })}
         <div className="h-px bg-white/5 my-4"></div>
         {userProfile?.role === "creator" && (
           <Link href="/creator" className="sidebar-link group text-brand-400 font-bold bg-brand-500/10 hover:bg-brand-500/20 rounded-xl mt-2 border border-brand-500/20 mb-2">
