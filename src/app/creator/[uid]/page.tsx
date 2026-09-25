@@ -482,8 +482,6 @@ export default function CreatorStorefront() {
           rzpKey={pricing.rzpKey || ""}
           onSuccess={() => {
             showToast("Transaction Successful!", "success");
-            setIsCheckoutOpen(false);
-            setCheckoutItem(null);
           }}
           onAlert={(msg, title, type) => {
             showToast(msg, type === "error" ? "error" : "info");

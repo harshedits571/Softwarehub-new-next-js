@@ -713,7 +713,10 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
       {isCheckoutOpen && checkoutItem && (
         <CheckoutModal
           isOpen={isCheckoutOpen}
-          onClose={() => setIsCheckoutOpen(false)}
+          onClose={() => {
+            setIsCheckoutOpen(false);
+            setCheckoutItem(null);
+          }}
           itemId={checkoutItem.id}
           itemTitle={checkoutItem.title}
           amount={checkoutItem.amount}
@@ -721,7 +724,6 @@ export default function ProductDetailsClient({ params }: { params: Promise<{ id:
           rzpKey={pricing.rzpKey}
           onSuccess={(paymentId) => {
             showToast("Payment Successful! Access Unlocked.", "success");
-            setIsCheckoutOpen(false);
           }}
           onAlert={(msg, title, type) => {
             showToast(msg, type === "error" ? "error" : "info");

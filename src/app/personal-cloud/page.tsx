@@ -113,7 +113,10 @@ export default function PersonalCloudPage() {
       {isCheckoutOpen && checkoutItem && (
         <CheckoutModal
           isOpen={isCheckoutOpen}
-          onClose={() => setIsCheckoutOpen(false)}
+          onClose={() => {
+            setIsCheckoutOpen(false);
+            setCheckoutItem(null);
+          }}
           itemId={checkoutItem.id}
           itemTitle={checkoutItem.title}
           amount={checkoutItem.amount}
@@ -121,7 +124,6 @@ export default function PersonalCloudPage() {
           rzpKey={pricing.rzpKey}
           onSuccess={(paymentId) => {
             showToast("Payment Successful! Personal Cloud Pro Unlocked.", "success");
-            setIsCheckoutOpen(false);
           }}
           onAlert={(msg, title, type) => {
             showToast(msg, type === "error" ? "error" : "info");

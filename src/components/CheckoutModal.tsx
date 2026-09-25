@@ -68,14 +68,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [creatorRzpAccount, setCreatorRzpAccount] = useState<string | null>(null);
-  const [purchasedLicense, setPurchasedLicense] = useState<{
-    key: string;
+  const [desktopDownloadUrl, setDesktopDownloadUrl] = useState("/downloads/PersonalCloud-Pro-Setup.exe");
+  const [copiedPaymentId, setCopiedPaymentId] = useState(false);
+  const [successData, setSuccessData] = useState<{
+    type: "personal_cloud" | "website_pro" | "software_download";
+    title: string;
     email: string;
+    paymentId: string;
+    licenseKey?: string;
     password?: string;
-    plan: string;
-    maxMachines: number;
+    plan?: string;
+    maxMachines?: number;
+    downloadUrl?: string;
   } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/config/software_updates")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.success && data.downloadUrl) {
+          setDesktopDownloadUrl(data.downloadUrl);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -480,12 +497,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   });
                 } catch (txErr) {}
 
-                setPurchasedLicense({
-                  key: generatedKey,
+                setSuccessData({
+                  type: "personal_cloud",
+                  title: `Personal Cloud ${planType.toUpperCase()} Activated`,
                   email: userEmail,
+                  paymentId: paymentId,
+                  licenseKey: generatedKey,
                   password: password,
                   plan: planType,
                   maxMachines: maxMac,
+                  downloadUrl: desktopDownloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe",
                 });
                 onSuccess(paymentId);
                 return;
@@ -555,8 +576,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 }, { merge: true });
               } catch (custErr) {}
 
+              setSuccessData({
+                type: isProMembership ? "website_pro" : "software_download",
+                title: isProMembership ? "Website Lifetime Pro Access Unlocked" : (itemTitle || "Software Access Unlocked"),
+                email: userEmail,
+                paymentId: paymentId,
+                downloadUrl: "/",
+              });
               onSuccess(paymentId);
-              onClose();
             } catch (err) {
               console.error("Error executing payment updates:", err);
               onAlert("Payment successful, but database logs failed. Please contact support.", "DB Error", "error");
@@ -584,90 +611,192 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  if (purchasedLicense) {
+  if (successData) {
     return (
-      <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-        <div className="bg-[#0e0e18] border-2 border-indigo-500/50 w-full max-w-lg rounded-3xl p-6 sm:p-8 relative shadow-2xl text-center">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-500/30">
-            <i className="fa-solid fa-circle-check"></i>
+      <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-300">
+        <div className="bg-[#0e0e18] border-2 border-emerald-500/40 w-full max-w-xl rounded-[2rem] p-6 sm:p-8 relative shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center overflow-hidden">
+          {/* Ambient Glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-36 bg-emerald-500/20 blur-[90px] pointer-events-none rounded-full"></div>
+          
+          <button
+            type="button"
+            onClick={() => {
+              setSuccessData(null);
+              onClose();
+            }}
+            className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm"
+          >
+            <i className="fa-solid fa-xmark"></i>
+          </button>
+
+          {/* Success Check Badge */}
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center mx-auto mb-4 text-3xl shadow-[0_0_30px_rgba(16,185,129,0.4)] border border-emerald-300/40 relative">
+            <i className="fa-solid fa-check"></i>
           </div>
 
-          <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full mb-3 inline-block">
-            PAYMENT SUCCESSFUL • ACCOUNT READY
+          <span className="text-[11px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3.5 py-1 rounded-full mb-3 inline-block">
+            🎉 PAYMENT SUCCESSFUL • ACCESS ACTIVATED
           </span>
 
-          <h2 className="text-2xl font-black text-white mb-2">Personal Cloud Account Ready</h2>
-          <p className="text-xs text-gray-400 mb-6">
-            Your SoftwareHubs account is activated. Use your <b>Email & Password</b> below to log into the Windows PC app and mobile gateway!
-          </p>
+          <h2 className="text-2xl sm:text-3xl font-black text-white mb-1.5 tracking-tight">
+            {successData.title}
+          </h2>
 
-          <div className="bg-[#141424] border border-white/10 rounded-2xl p-4 mb-5 text-left space-y-3">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400">Desktop Login Email:</span>
-              <span className="text-white font-bold">{purchasedLicense.email}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400">Desktop App Password:</span>
-              <span className="text-emerald-400 font-bold">•••••••• (Your Created Password)</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400">Active Plan:</span>
-              <span className="text-emerald-400 font-bold uppercase">{purchasedLicense.plan} (Lifetime)</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400">Device Quota:</span>
-              <span className="text-indigo-300 font-bold">{purchasedLicense.maxMachines} PC{purchasedLicense.maxMachines > 1 ? "s" : ""}</span>
-            </div>
-
-            <div className="pt-2 border-t border-white/10">
-              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Backup License Key:</div>
-              <div className="flex items-center justify-between bg-black/50 border border-indigo-500/30 rounded-xl px-3 py-2">
-                <span className="font-mono text-xs font-bold text-indigo-300">
-                  {purchasedLicense.key}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(purchasedLicense.key);
-                    setCopiedKey(true);
-                    setTimeout(() => setCopiedKey(false), 2500);
-                  }}
-                  className="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-bold"
-                >
-                  {copiedKey ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <a
-              href="/cloud"
-              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-95 text-white font-black text-sm py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <span>🚀 Open Personal Cloud Gateway</span>
-              <i className="fa-solid fa-arrow-right text-xs"></i>
-            </a>
-
-            <a
-              href="/downloads/PersonalCloud-Pro-Setup.exe"
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              <i className="fa-solid fa-download"></i>
-              <span>Download Desktop Installer (.exe)</span>
-            </a>
-
+          <div className="flex items-center justify-center gap-2 mb-5">
+            <span className="text-xs text-gray-400">Payment ID:</span>
             <button
               type="button"
               onClick={() => {
-                setPurchasedLicense(null);
-                onClose();
+                navigator.clipboard.writeText(successData.paymentId);
+                setCopiedPaymentId(true);
+                setTimeout(() => setCopiedPaymentId(false), 2000);
               }}
-              className="w-full bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold py-2.5 rounded-xl transition-colors"
+              className="text-xs font-mono text-indigo-300 bg-indigo-950/60 border border-indigo-500/30 px-2 py-0.5 rounded-lg hover:border-indigo-400 transition-colors flex items-center gap-1.5"
             >
-              Done & Close
+              <span>{successData.paymentId}</span>
+              <i className={copiedPaymentId ? "fa-solid fa-check text-emerald-400" : "fa-regular fa-copy"}></i>
             </button>
           </div>
+
+          {/* Details Card */}
+          {successData.type === "personal_cloud" ? (
+            <div className="space-y-4 mb-6">
+              <p className="text-xs text-gray-300 leading-relaxed max-w-md mx-auto">
+                Your Personal Cloud account has been activated! Sign into the Windows PC software with your <b>Email & Password</b> below.
+              </p>
+
+              <div className="bg-[#141424]/90 border border-white/10 rounded-2xl p-4 text-left space-y-3 shadow-inner">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Login Email:</span>
+                  <span className="text-white font-bold">{successData.email}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Desktop App Password:</span>
+                  <span className="text-emerald-400 font-bold">•••••••• (Your Created Password)</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Plan Tier:</span>
+                  <span className="text-emerald-400 font-bold uppercase">{successData.plan} (Lifetime • 0 Monthly Fees)</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">PC License Limit:</span>
+                  <span className="text-indigo-300 font-bold">{successData.maxMachines} Windows PC{successData.maxMachines && successData.maxMachines > 1 ? "s" : ""}</span>
+                </div>
+
+                {successData.licenseKey && (
+                  <div className="pt-3 border-t border-white/10">
+                    <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                      <span>Your Lifetime License Key:</span>
+                      <span className="text-[10px] text-emerald-400 font-normal">Keep this safe</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-black/60 border border-indigo-500/40 rounded-xl px-3.5 py-2.5">
+                      <span className="font-mono text-xs sm:text-sm font-black text-indigo-300 tracking-wider select-all">
+                        {successData.licenseKey}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (successData.licenseKey) {
+                            navigator.clipboard.writeText(successData.licenseKey);
+                            setCopiedKey(true);
+                            setTimeout(() => setCopiedKey(false), 2500);
+                          }
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all shadow active:scale-95 flex items-center gap-1.5"
+                      >
+                        <i className={copiedKey ? "fa-solid fa-check text-emerald-300" : "fa-regular fa-copy"}></i>
+                        <span>{copiedKey ? "Copied!" : "Copy Key"}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5">
+                <a
+                  href={successData.downloadUrl || desktopDownloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                  download="PersonalCloud-Pro-Setup.exe"
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 text-white font-extrabold text-sm py-4 rounded-xl transition-all shadow-[0_0_25px_rgba(99,102,241,0.4)] flex items-center justify-center gap-2.5"
+                >
+                  <i className="fa-solid fa-download text-base"></i>
+                  <span>Download Desktop Installer (.exe)</span>
+                </a>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <a
+                    href="/cloud"
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-bold text-xs py-3 rounded-xl transition-all shadow flex items-center justify-center gap-1.5"
+                  >
+                    <span>🚀 Open Cloud Gateway</span>
+                  </a>
+
+                  <a
+                    href="/dashboard"
+                    className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs py-3 rounded-xl transition-all border border-white/10 flex items-center justify-center gap-1.5"
+                  >
+                    <i className="fa-solid fa-gauge text-xs text-indigo-400"></i>
+                    <span>My Dashboard</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 mb-6">
+              <p className="text-xs text-gray-300 leading-relaxed max-w-md mx-auto">
+                {successData.type === "website_pro"
+                  ? "Congratulations! You now have unlimited Lifetime Pro access to download all software, plugins, and editing packs on SoftwareHubs!"
+                  : "Your purchase is confirmed. You can now access and download this item immediately from your library."}
+              </p>
+
+              <div className="bg-[#141424]/90 border border-white/10 rounded-2xl p-4 text-left space-y-2.5 shadow-inner">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Account Email:</span>
+                  <span className="text-white font-bold">{successData.email}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Access Level:</span>
+                  <span className="text-emerald-400 font-bold">
+                    {successData.type === "website_pro" ? "Lifetime Website Pro Member 💎" : "Single Asset License"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Download Permissions:</span>
+                  <span className="text-indigo-300 font-bold">Unlimited Instant Downloads</span>
+                </div>
+              </div>
+
+              {/* Action Buttons for Website Pro */}
+              <div className="space-y-2.5">
+                <a
+                  href="/"
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-extrabold text-sm py-4 rounded-xl transition-all shadow-[0_0_25px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-layer-group"></i>
+                  <span>Explore & Download Software Library</span>
+                </a>
+
+                <a
+                  href="/dashboard"
+                  className="w-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs py-3 rounded-xl transition-all border border-white/10 flex items-center justify-center gap-1.5"
+                >
+                  <i className="fa-solid fa-gauge text-xs text-indigo-400"></i>
+                  <span>Go to My Dashboard</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setSuccessData(null);
+              onClose();
+            }}
+            className="w-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-semibold py-2.5 rounded-xl transition-colors mt-2"
+          >
+            Done & Close
+          </button>
         </div>
       </div>
     );
