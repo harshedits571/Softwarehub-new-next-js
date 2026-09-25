@@ -155,20 +155,29 @@ export default function PersonalStorageDashboard() {
             key: data.key || data.licenseKey || doc.id,
             customerName: data.customerName || data.name || "Customer",
             customerEmail: data.customerEmail || data.email || "",
-            plan: data.plan || data.planId || "starter",
+            plan: data.plan || data.planId || (data.isTrial ? "trial" : "starter"),
             status: data.status || "active",
+            claimStatus: data.claimStatus || (data.isGift && !data.claimed ? "unclaimed" : "claimed"),
+            isGift: Boolean(data.isGift),
+            isTrial: Boolean(data.isTrial || data.plan === "trial"),
+            claimed: Boolean(data.claimed),
+            giftNote: data.giftNote || "",
             issueDate: data.issueDate || data.createdAt,
-            expiryDate: data.expiryDate || "Lifetime",
-            maxMachines: data.maxMachines || 1,
+            createdAt: data.createdAt || data.issueDate,
+            trialStartDate: data.trialStartDate || data.createdAt,
+            trialEndDate: data.trialEndDate || data.expiryDate,
+            expiryDate: data.expiryDate || (data.isTrial ? data.trialEndDate : "Lifetime"),
+            maxMachines: data.maxMachines || (data.plan === "pro" ? 3 : data.plan === "family" ? 5 : 1),
             activatedMachines: data.activatedMachines || data.devices?.length || 0,
             devices: data.devices || [],
             notes: data.notes || "",
+            lastActiveAt: data.lastActiveAt || null,
           });
         });
         // Sort newest first
         items.sort((a, b) => {
-          const dateA = a.issueDate?.seconds || new Date(a.issueDate || 0).getTime();
-          const dateB = b.issueDate?.seconds || new Date(b.issueDate || 0).getTime();
+          const dateA = a.createdAt?.seconds || new Date(a.createdAt || a.issueDate || 0).getTime();
+          const dateB = b.createdAt?.seconds || new Date(b.createdAt || b.issueDate || 0).getTime();
           return dateB - dateA;
         });
         setLicenses(items);
@@ -261,33 +270,33 @@ export default function PersonalStorageDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner & Title Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#121622] p-5 rounded-2xl border border-white/5 shadow-xl">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xl shadow-lg shadow-cyan-500/25">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#121622] p-4 sm:p-5 rounded-2xl border border-white/5 shadow-xl">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-lg sm:text-xl shadow-lg shadow-cyan-500/25 shrink-0 mt-0.5 sm:mt-0">
             <i className="fa-solid fa-server"></i>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
                 Personal Cloud Dashboard
               </h1>
-              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 Live Real-Time Sync
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2 sm:line-clamp-none">
               Dedicated management center for Personal Cloud customers, sales, licenses, and software links
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-white/5 sm:border-0">
           <a
             href="/personal-cloud"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium border border-white/10 transition"
+            className="w-full sm:w-auto justify-center flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium border border-white/10 transition"
           >
             <i className="fa-solid fa-arrow-up-right-from-square text-cyan-400"></i>
             Live Storefront
@@ -316,14 +325,14 @@ export default function PersonalStorageDashboard() {
       )}
 
       {/* Top Navigation Tabs */}
-      <div className="bg-[#121622] p-1.5 rounded-xl border border-white/5 flex items-center gap-1 overflow-x-auto scrollbar-none">
+      <div className="bg-[#121622] p-1.5 rounded-xl border border-white/5 flex items-center gap-1 overflow-x-auto scrollbar-none touch-pan-x">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 shrink-0 ${
                 isActive
                   ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30 shadow-md shadow-cyan-500/10"
                   : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]"

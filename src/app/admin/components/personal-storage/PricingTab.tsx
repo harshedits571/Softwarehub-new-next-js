@@ -184,7 +184,7 @@ export default function PricingTab() {
       </div>
 
       {/* Plan Selector Tabs */}
-      <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+      <div className="flex items-center gap-2 border-b border-white/5 pb-2 overflow-x-auto scrollbar-none flex-nowrap">
         {Object.keys(plans).map((key) => {
           const p = plans[key];
           const isSelected = activePlanKey === key;
@@ -192,7 +192,7 @@ export default function PricingTab() {
             <button
               key={key}
               onClick={() => setActivePlanKey(key)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
                 isSelected
                   ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                   : "bg-white/5 hover:bg-white/10 text-gray-400"
@@ -263,7 +263,7 @@ export default function PricingTab() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-gray-400 block mb-1">
                 Selling Price (₹ INR) *
@@ -284,6 +284,18 @@ export default function PricingTab() {
                 value={currentPlan.originalPrice}
                 onChange={(e) => updatePlanField(activePlanKey, "originalPrice", Number(e.target.value))}
                 className="w-full px-3.5 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-gray-400 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-gray-400 block mb-1">
+                USD Price ($ USD)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={currentPlan.usdPrice || 9.99}
+                onChange={(e) => updatePlanField(activePlanKey, "usdPrice", Number(e.target.value))}
+                className="w-full px-3.5 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-emerald-300 font-bold focus:outline-none focus:border-cyan-500"
               />
             </div>
             <div>

@@ -234,17 +234,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     const description = itemId ? `Access to: ${itemTitle}` : "Lifetime Pro Access Bundle";
 
-    // Plan determination
+    // Strict Personal Cloud product determination (ONLY triggers for Personal Cloud items)
     const isPersonalCloud =
-      String(itemId || itemTitle).toLowerCase().includes("personal") ||
-      String(itemId || itemTitle).toLowerCase().includes("starter") ||
-      String(itemId || itemTitle).toLowerCase().includes("pro") ||
-      String(itemId || itemTitle).toLowerCase().includes("family");
+      Boolean(itemId && String(itemId).toLowerCase().startsWith("personal-cloud")) ||
+      Boolean(itemId && String(itemId).toLowerCase().includes("personal_cloud")) ||
+      Boolean(itemTitle && String(itemTitle).toLowerCase().includes("personal cloud"));
 
-    const planType = String(itemId || itemTitle).toLowerCase().includes("family")
-      ? "family"
-      : String(itemId || itemTitle).toLowerCase().includes("starter")
-      ? "starter"
+    const isProMembership = !isPersonalCloud && (!itemId || itemId === "PRO_BUNDLE" || String(itemTitle).toLowerCase().includes("pro membership"));
+
+    const planType = isPersonalCloud
+      ? String(itemId || itemTitle).toLowerCase().includes("family")
+        ? "family"
+        : String(itemId || itemTitle).toLowerCase().includes("starter")
+        ? "starter"
+        : "pro"
       : "pro";
 
     const userEmail = cleanEmail;
@@ -252,35 +255,37 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const cleanLeadId = userEmail.replace(/[^a-zA-Z0-9]/g, "_") || `lead_${Date.now()}`;
     const leadRef = doc(firestore, "leads", cleanLeadId);
 
-    // Automatically record Lead
-    try {
-      await setDoc(
-        leadRef,
-        {
-          id: cleanLeadId,
-          name: name || authenticatedUser?.displayName || "Customer",
-          email: userEmail,
-          phone: customerPhone,
-          plan: planType,
-          leadStatus: "Interested",
-          paymentStatus: "Pending",
-          amountPaid: 0,
-          registrationDate: Timestamp.now(),
-          source: isPersonalCloud ? "Personal Cloud Checkout" : "SoftwareHubs Store",
-          activityHistory: [
-            {
-              action: "Clicked Proceed to Pay (Checkout Initiated)",
-              status: "Interested",
-              plan: planType,
-              amount: amount,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        },
-        { merge: true }
-      );
-    } catch (leadInitErr) {
-      console.warn("Could not save initial Interested lead state:", leadInitErr);
+    // Automatically record Lead ONLY for Personal Cloud purchases
+    if (isPersonalCloud) {
+      try {
+        await setDoc(
+          leadRef,
+          {
+            id: cleanLeadId,
+            name: name || authenticatedUser?.displayName || "Customer",
+            email: userEmail,
+            phone: customerPhone,
+            plan: planType,
+            leadStatus: "Interested",
+            paymentStatus: "Pending",
+            amountPaid: 0,
+            registrationDate: Timestamp.now(),
+            source: "Personal Cloud Checkout",
+            activityHistory: [
+              {
+                action: "Clicked Proceed to Pay (Checkout Initiated)",
+                status: "Interested",
+                plan: planType,
+                amount: amount,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          { merge: true }
+        );
+      } catch (leadInitErr) {
+        console.warn("Could not save initial Interested lead state:", leadInitErr);
+      }
     }
 
     try {
@@ -292,7 +297,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           amount: amount,
           currency: currency,
           productId: itemId || "PRO_BUNDLE",
-          productTitle: itemTitle || "Lifetime Pro Access",
+          productTitle: itemTitle || (isPersonalCloud ? "Personal Cloud Pro" : "Pro Membership"),
           customerEmail: userEmail,
           customerName: name || authenticatedUser?.displayName || "",
           creatorLinkedAccountId: creatorRzpAccount || null,
@@ -340,120 +345,141 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               const paymentId = response.razorpay_payment_id;
               const orderId = response.razorpay_order_id;
 
-              // Generate License Key
-              const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-              const p = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-              const generatedKey = `PCLOUD-${p()}-${p()}-${p()}-${p()}`;
-              const maxMac = planType === "family" ? 5 : planType === "pro" ? 3 : 1;
+              // === CASE 1: PERSONAL CLOUD PURCHASE (Generates license key & Personal Cloud docs) ===
+              if (isPersonalCloud) {
+                const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                const p = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+                const generatedKey = `PCLOUD-${p()}-${p()}-${p()}-${p()}`;
+                const maxMac = planType === "family" ? 5 : planType === "pro" ? 3 : 1;
 
-              // Write to licenses collection
-              try {
-                const licRef = doc(firestore, "licenses", generatedKey);
-                await setDoc(licRef, {
-                  id: generatedKey,
-                  key: generatedKey,
-                  licenseKey: generatedKey,
-                  customerEmail: userEmail,
-                  customerName: name || authenticatedUser?.displayName || "Customer",
-                  userId: authenticatedUser?.uid || null,
-                  plan: planType,
-                  maxMachines: maxMac,
-                  activatedMachines: 0,
-                  amount: amount,
-                  currency: currency,
-                  paymentId: paymentId,
-                  orderId: orderId || null,
-                  status: "active",
-                  issueDate: Timestamp.now(),
-                  createdAt: Timestamp.now(),
-                  expiryDate: "Lifetime",
-                  devices: [],
-                });
-
-                if (authenticatedUser) {
-                  await setDoc(doc(firestore, "users", authenticatedUser.uid), {
-                    personalCloud: {
-                      plan: planType,
-                      licenseKey: generatedKey,
-                      maxMachines: maxMac,
-                      appPassword: password, // Store password so desktop app activates 100% reliably
-                      activatedAt: Timestamp.now(),
-                    },
-                    [`licenses.${generatedKey}`]: {
-                      licenseKey: generatedKey,
-                      plan: planType,
-                      createdAt: Date.now(),
-                    },
-                  }, { merge: true });
-                }
-              } catch (licErr) {
-                console.error("Failed to write license to Firestore:", licErr);
-              }
-
-              // Update lead status to Verified
-              try {
-                const leadSnap = await getDoc(leadRef);
-                const existingHistory = leadSnap.exists() && Array.isArray(leadSnap.data()?.activityHistory)
-                  ? leadSnap.data().activityHistory
-                  : [];
-
-                await setDoc(
-                  leadRef,
-                  {
-                    leadStatus: "Verified",
-                    paymentStatus: "Paid",
-                    purchaseDate: Timestamp.now(),
-                    amountPaid: amount,
+                // Write to licenses collection
+                try {
+                  const licRef = doc(firestore, "licenses", generatedKey);
+                  await setDoc(licRef, {
+                    id: generatedKey,
+                    key: generatedKey,
+                    licenseKey: generatedKey,
+                    customerEmail: userEmail,
+                    customerName: name || authenticatedUser?.displayName || "Customer",
+                    userId: authenticatedUser?.uid || null,
+                    plan: planType,
+                    maxMachines: maxMac,
+                    activatedMachines: 0,
+                    amount: amount,
+                    currency: currency,
                     paymentId: paymentId,
                     orderId: orderId || null,
-                    licenseKey: generatedKey,
-                    userId: authenticatedUser?.uid || null,
-                    activityHistory: [
-                      ...existingHistory,
-                      {
-                        action: "Payment Verified via Razorpay",
-                        status: "Verified",
-                        paymentId: paymentId,
-                        orderId: orderId || null,
-                        amount: amount,
+                    status: "active",
+                    issueDate: Timestamp.now(),
+                    createdAt: Timestamp.now(),
+                    expiryDate: "Lifetime",
+                    devices: [],
+                  });
+
+                  if (authenticatedUser) {
+                    await setDoc(doc(firestore, "users", authenticatedUser.uid), {
+                      personalCloud: {
+                        plan: planType,
                         licenseKey: generatedKey,
-                        timestamp: new Date().toISOString(),
+                        maxMachines: maxMac,
+                        appPassword: password, // Store password so desktop app activates 100% reliably
+                        activatedAt: Timestamp.now(),
                       },
-                    ],
-                  },
-                  { merge: true }
-                );
-              } catch (leadUpdateErr) {
-                console.warn("Could not update lead status to Verified:", leadUpdateErr);
-              }
+                      [`licenses.${generatedKey}`]: {
+                        licenseKey: generatedKey,
+                        plan: planType,
+                        createdAt: Date.now(),
+                      },
+                    }, { merge: true });
+                  }
+                } catch (licErr) {
+                  console.error("Failed to write license to Firestore:", licErr);
+                }
 
-              // Write payment record with invoice info
-              try {
-                const invNum = `INV-${paymentId.slice(-8).toUpperCase()}`;
-                await setDoc(doc(firestore, "payments", paymentId), {
-                  id: paymentId,
-                  paymentId: paymentId,
-                  orderId: orderId || null,
-                  customerName: name || authenticatedUser?.displayName || "Customer",
-                  customerEmail: userEmail,
-                  customerPhone: customerPhone,
-                  userId: authenticatedUser?.uid || null,
-                  planId: planType,
-                  planName: `${planType.toUpperCase()} Plan`,
-                  amount: amount,
-                  currency: currency,
-                  gateway: "razorpay",
-                  gatewayStatus: "captured",
-                  transactionDate: Timestamp.now(),
-                  invoiceNumber: invNum,
-                  refundStatus: "none",
-                  licenseKey: generatedKey,
-                });
-              } catch (payDocErr) {
-                console.warn("Could not write payment to payments collection:", payDocErr);
-              }
+                // Update lead status to Verified
+                try {
+                  const leadSnap = await getDoc(leadRef);
+                  const existingHistory = leadSnap.exists() && Array.isArray(leadSnap.data()?.activityHistory)
+                    ? leadSnap.data().activityHistory
+                    : [];
 
-              if (isPersonalCloud) {
+                  await setDoc(
+                    leadRef,
+                    {
+                      leadStatus: "Verified",
+                      paymentStatus: "Paid",
+                      purchaseDate: Timestamp.now(),
+                      amountPaid: amount,
+                      paymentId: paymentId,
+                      orderId: orderId || null,
+                      licenseKey: generatedKey,
+                      userId: authenticatedUser?.uid || null,
+                      activityHistory: [
+                        ...existingHistory,
+                        {
+                          action: "Payment Verified via Razorpay",
+                          status: "Verified",
+                          paymentId: paymentId,
+                          orderId: orderId || null,
+                          amount: amount,
+                          licenseKey: generatedKey,
+                          timestamp: new Date().toISOString(),
+                        },
+                      ],
+                    },
+                    { merge: true }
+                  );
+                } catch (leadUpdateErr) {
+                  console.warn("Could not update lead status to Verified:", leadUpdateErr);
+                }
+
+                // Write payment record to Personal Cloud payments collection
+                try {
+                  const invNum = `INV-${paymentId.slice(-8).toUpperCase()}`;
+                  await setDoc(doc(firestore, "payments", paymentId), {
+                    id: paymentId,
+                    paymentId: paymentId,
+                    orderId: orderId || null,
+                    customerName: name || authenticatedUser?.displayName || "Customer",
+                    customerEmail: userEmail,
+                    customerPhone: customerPhone,
+                    userId: authenticatedUser?.uid || null,
+                    planId: planType,
+                    planName: `Personal Cloud ${planType.toUpperCase()}`,
+                    amount: amount,
+                    currency: currency,
+                    gateway: "razorpay",
+                    gatewayStatus: "captured",
+                    transactionDate: Timestamp.now(),
+                    invoiceNumber: invNum,
+                    refundStatus: "none",
+                    licenseKey: generatedKey,
+                  });
+                } catch (payDocErr) {
+                  console.warn("Could not write payment to payments collection:", payDocErr);
+                }
+
+                // Also log general transaction
+                try {
+                  await addDoc(collection(firestore, "transactions"), {
+                    uid: authenticatedUser?.uid || null,
+                    email: userEmail,
+                    userName: name || authenticatedUser?.displayName || "Customer",
+                    amount: amount,
+                    currency: currency,
+                    itemId: itemId || `personal-cloud-${planType}`,
+                    itemTitle: itemTitle || `Personal Cloud ${planType.toUpperCase()}`,
+                    paymentId: paymentId,
+                    orderId: orderId || null,
+                    type: "personal_cloud",
+                    vendorId: "platform",
+                    gateway: "razorpay",
+                    status: "captured",
+                    licenseKey: generatedKey,
+                    timestamp: Timestamp.now(),
+                  });
+                } catch (txErr) {}
+
                 setPurchasedLicense({
                   key: generatedKey,
                   email: userEmail,
@@ -464,6 +490,70 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 onSuccess(paymentId);
                 return;
               }
+
+              // === CASE 2: WEBSITE PRO MEMBERSHIP (₹10) OR SOFTWARE/PLUGIN PURCHASE ===
+              // (Grants access ONLY to download software & plugins on the website - NO Personal Cloud license generated)
+              if (authenticatedUser) {
+                const userDocRef = doc(firestore, "users", authenticatedUser.uid);
+                const userSnap = await getDoc(userDocRef);
+                const userData = userSnap.exists() ? userSnap.data() : {};
+                const updatedPurchased = { ...(userData?.purchased || {}) };
+
+                if (isProMembership) {
+                  updatedPurchased["PRO_BUNDLE"] = true;
+                } else if (itemId) {
+                  updatedPurchased[itemId] = true;
+                }
+
+                await setDoc(userDocRef, {
+                  isPaid: isProMembership ? true : (userData.isPaid || false),
+                  purchased: updatedPurchased,
+                  paymentId: paymentId,
+                  paidAt: Timestamp.now(),
+                  updatedAt: Timestamp.now(),
+                }, { merge: true });
+              }
+
+              // Log transaction for website revenue / creator payouts
+              try {
+                await addDoc(collection(firestore, "transactions"), {
+                  uid: authenticatedUser?.uid || null,
+                  email: userEmail,
+                  userName: name || authenticatedUser?.displayName || "Customer",
+                  amount: amount,
+                  currency: currency,
+                  itemId: isProMembership ? "PRO_BUNDLE" : (itemId || "software_item"),
+                  itemTitle: itemTitle || (isProMembership ? "Pro Membership" : "Software Access"),
+                  paymentId: paymentId,
+                  orderId: orderId || null,
+                  type: isProMembership ? "pro_membership" : "individual",
+                  vendorId: vendorId || "platform",
+                  payoutAccountId: creatorRzpAccount || "",
+                  gateway: "razorpay",
+                  status: "captured",
+                  timestamp: Timestamp.now(),
+                });
+              } catch (txErr) {
+                console.warn("Could not log store transaction:", txErr);
+              }
+
+              // Update customer store spend stats
+              try {
+                const custDocRef = doc(firestore, "customers", userEmail);
+                const custSnap = await getDoc(custDocRef);
+                const custData = custSnap.exists() ? custSnap.data() : {};
+                const spent = (custData?.totalSpent || 0) + amount;
+                const orders = (custData?.ordersCount || 0) + 1;
+
+                await setDoc(custDocRef, {
+                  phone: customerPhone,
+                  name: name || authenticatedUser?.displayName || "Customer",
+                  totalSpent: spent,
+                  ordersCount: orders,
+                  lastOrderDate: Timestamp.now(),
+                  firstOrderDate: custData?.firstOrderDate || Timestamp.now(),
+                }, { merge: true });
+              } catch (custErr) {}
 
               onSuccess(paymentId);
               onClose();

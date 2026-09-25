@@ -79,18 +79,16 @@ export default function PersonalCloudPage() {
 
           <button
             onClick={() => {
-              setCheckoutItem({
-                id: "personal-cloud-pro-lifetime",
-                title: "Personal Cloud Pro - Lifetime License",
-                amount: pricing.currency === "INR" ? 499 : 9.99,
-              });
-              setIsCheckoutOpen(true);
+              const el = document.getElementById("pricing-section");
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth" });
+              }
             }}
-            className="premium-button font-bold px-6 py-2 rounded-xl transition-all shadow-lg text-xs relative overflow-hidden group ml-auto"
+            className="premium-button font-bold px-6 py-2 rounded-xl transition-all shadow-lg text-xs relative overflow-hidden group ml-auto cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
               <i className="fa-solid fa-crown text-[10px]"></i>
-              Get Pro Access
+              View Plans & Pricing
             </span>
           </button>
         </div>

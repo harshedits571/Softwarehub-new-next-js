@@ -6,6 +6,7 @@ import { firestore } from "../../utils/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useCurrency } from "../../hooks/useCurrency";
 import { RatingModal } from "../../components/RatingModal";
+import { CheckoutModal } from "../../components/CheckoutModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -40,7 +41,14 @@ export default function CustomerDashboard() {
   const [orders, setOrders] = useState<Transaction[]>([]);
   const [purchasedProducts, setPurchasedProducts] = useState<PurchasedItem[]>([]);
   const [creatorMap, setCreatorMap] = useState<Record<string, string>>({});
+  const [personalCloudLicense, setPersonalCloudLicense] = useState<any>(null);
+  const [softwareUpdate, setSoftwareUpdate] = useState<any>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Checkout modal for upgrades
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [checkoutItem, setCheckoutItem] = useState<{ id: string | null; title: string | null; amount: number } | null>(null);
 
   // Profile Form States
   const [isEditing, setIsEditing] = useState(false);
@@ -49,7 +57,7 @@ export default function CustomerDashboard() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Tabs navigation
-  const [activeTab, setActiveTab] = useState<"library" | "orders" | "settings">("library");
+  const [activeTab, setActiveTab] = useState<"library" | "cloud" | "orders" | "settings">("library");
 
   // Ratings overlay
   const [ratingItem, setRatingItem] = useState<{ id: string; title: string; version: string; ownerUid?: string } | null>(null);
@@ -132,10 +140,35 @@ export default function CustomerDashboard() {
       setLoading(false);
     });
 
+    // 4. Fetch Personal Cloud license
+    const cleanUserEmail = (currentUser.email || "").trim().toLowerCase();
+    const qLic = query(collection(firestore, "licenses"), where("customerEmail", "==", cleanUserEmail));
+    const unsubLic = onSnapshot(qLic, (snap) => {
+      if (!snap.empty) {
+        const licDoc = snap.docs[0];
+        setPersonalCloudLicense({ id: licDoc.id, ...licDoc.data() });
+      } else if (userProfile && (userProfile as any).personalCloud) {
+        setPersonalCloudLicense((userProfile as any).personalCloud);
+      } else {
+        setPersonalCloudLicense(null);
+      }
+    });
+
+    // 5. Fetch software update info
+    fetch("/api/config/software_updates")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.success) {
+          setSoftwareUpdate(data);
+        }
+      })
+      .catch((err) => console.warn("Could not fetch software updates:", err));
+
     return () => {
       unsubCust();
       unsubOrders();
       unsubProducts();
+      unsubLic();
     };
   }, [currentUser, userProfile]);
 
@@ -244,7 +277,7 @@ export default function CustomerDashboard() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-white/5 gap-6">
+        <div className="flex flex-wrap border-b border-white/5 gap-4 sm:gap-6">
           <button
             onClick={() => setActiveTab("library")}
             className={`pb-4 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
@@ -252,6 +285,20 @@ export default function CustomerDashboard() {
             }`}
           >
             My Download Library ({purchasedProducts.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("cloud")}
+            className={`pb-4 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+              activeTab === "cloud" ? "text-cyan-400 border-cyan-500" : "text-gray-500 border-transparent hover:text-white"
+            }`}
+          >
+            <i className="fa-solid fa-cloud text-xs"></i>
+            Personal Cloud Storage
+            {personalCloudLicense ? (
+              <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded font-mono font-bold uppercase">
+                {personalCloudLicense.plan || "PRO"}
+              </span>
+            ) : null}
           </button>
           <button
             onClick={() => setActiveTab("orders")}
@@ -320,6 +367,203 @@ export default function CustomerDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PERSONAL CLOUD TAB */}
+        {activeTab === "cloud" && (
+          <div className="space-y-6">
+            {personalCloudLicense ? (
+              <div className="bg-[#0f121d] border border-cyan-500/20 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                {/* Header Info */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        {personalCloudLicense.plan || "PRO"} EDITION
+                      </span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        {personalCloudLicense.status || "ACTIVE"}
+                      </span>
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black text-white">
+                      Personal Cloud Storage System
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Private, self-hosted Windows storage with remote 4K video streaming & desktop control.
+                    </p>
+                  </div>
+
+                  {/* Quota & Expiry badge */}
+                  <div className="flex gap-4 sm:text-right">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">License Expiry</span>
+                      <span className="text-sm font-bold text-emerald-400">
+                        {personalCloudLicense.expiryDate === "Lifetime" || !personalCloudLicense.expiryDate
+                          ? "Lifetime Access"
+                          : new Date(personalCloudLicense.expiryDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">PC Machine Slots</span>
+                      <span className="text-sm font-bold text-cyan-300">
+                        {personalCloudLicense.devices?.length || personalCloudLicense.activatedMachines || 0} / {personalCloudLicense.maxMachines || 3} PCs
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* License Key Box */}
+                <div className="bg-[#0a0d16] border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                      <i className="fa-solid fa-key text-cyan-400"></i>
+                      Your Standalone License Key
+                    </span>
+                    <button
+                      onClick={() => {
+                        const key = personalCloudLicense.key || personalCloudLicense.licenseKey || personalCloudLicense.id;
+                        navigator.clipboard.writeText(key);
+                        setCopiedKey(true);
+                        showToast("License Key copied to clipboard!", "success");
+                        setTimeout(() => setCopiedKey(false), 2500);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-bold border border-cyan-500/20 transition flex items-center gap-1.5"
+                    >
+                      <i className={`fa-solid ${copiedKey ? "fa-check text-emerald-400" : "fa-copy"}`}></i>
+                      {copiedKey ? "Copied!" : "Copy Key"}
+                    </button>
+                  </div>
+
+                  <div className="font-mono text-sm sm:text-base font-black text-cyan-300 bg-black/40 px-4 py-3 rounded-xl border border-cyan-500/20 tracking-wider break-all select-all">
+                    {personalCloudLicense.key || personalCloudLicense.licenseKey || personalCloudLicense.id}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Use this license key or your SoftwareHubs <b>Email & Password</b> to activate the Windows PC desktop application.
+                  </p>
+                </div>
+
+                {/* Software Version & Actions */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  {/* Download Desktop App */}
+                  <a
+                    href={softwareUpdate?.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex flex-col justify-between gap-3 shadow-lg shadow-blue-500/20 transition group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <i className="fa-solid fa-download text-lg"></i>
+                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">
+                        v{softwareUpdate?.currentVersion || "1.0.4"}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-sm group-hover:translate-x-0.5 transition-transform">
+                        Download Windows PC App
+                      </div>
+                      <span className="text-[10px] text-blue-200 font-normal">
+                        Installer .exe ({softwareUpdate?.fileSizeMB || 48.5} MB)
+                      </span>
+                    </div>
+                  </a>
+
+                  {/* Open Web Gateway */}
+                  <Link
+                    href="/cloud"
+                    className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs flex flex-col justify-between gap-3 transition group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <i className="fa-solid fa-globe text-lg text-emerald-400"></i>
+                      <span className="text-[10px] text-emerald-400 font-mono">P2P LIVE</span>
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-sm group-hover:translate-x-0.5 transition-transform">
+                        Open Cloud Web Gateway
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        Access PC files, 4K player & screen mirror
+                      </span>
+                    </div>
+                  </Link>
+
+                  {/* Upgrade to Pro (if trial or starter) */}
+                  {(personalCloudLicense.plan === "starter" || personalCloudLicense.plan === "trial" || personalCloudLicense.isTrial) ? (
+                    <button
+                      onClick={() => {
+                        setCheckoutItem({
+                          id: "personal-cloud-pro",
+                          title: "Personal Cloud Pro - Lifetime License Upgrade",
+                          amount: pricing.currency === "INR" ? 999 : 19.99,
+                        });
+                        setIsCheckoutOpen(true);
+                      }}
+                      className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-amber-300 font-bold text-xs flex flex-col justify-between gap-3 transition text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <i className="fa-solid fa-crown text-lg text-amber-400"></i>
+                        <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded font-bold">UPGRADE</span>
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-sm text-white">Upgrade to Lifetime Pro</div>
+                        <span className="text-[10px] text-amber-200 font-normal">
+                          Unlock 3 PCs, 4K streaming & screen mirror
+                        </span>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 text-slate-400 text-xs flex flex-col justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-[11px]">
+                        <i className="fa-solid fa-circle-check"></i> Highest Tier Active
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        You have full Lifetime access with multi-machine sync and free updates.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* No License Yet */
+              <div className="bg-[#0f121d] border border-white/10 rounded-3xl p-8 sm:p-12 text-center space-y-6 max-w-2xl mx-auto shadow-2xl">
+                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center text-3xl mx-auto">
+                  <i className="fa-solid fa-cloud"></i>
+                </div>
+
+                <div>
+                  <h3 className="text-2xl font-black text-white">Turn Your PC Into Private Cloud Storage</h3>
+                  <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
+                    Zero monthly cloud storage fees. Stream 4K video, mirror your desktop screen, and access unlimited storage straight from your phone.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setCheckoutItem({
+                        id: "personal-cloud-starter",
+                        title: "Personal Cloud Starter - Lifetime License",
+                        amount: pricing.currency === "INR" ? 499 : 9.99,
+                      });
+                      setIsCheckoutOpen(true);
+                    }}
+                    className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Get Lifetime License</span>
+                    <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                  </button>
+
+                  <Link
+                    href="/personal-cloud"
+                    className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs border border-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Explore All Features & Free Trial</span>
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -444,6 +688,26 @@ export default function CustomerDashboard() {
           versionName={ratingItem?.version || ""}
           ownerUid={ratingItem?.ownerUid || undefined}
           onToast={showToast}
+        />
+      )}
+
+      {/* Checkout Modal for Upgrades */}
+      {isCheckoutOpen && checkoutItem && (
+        <CheckoutModal
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          itemId={checkoutItem.id}
+          itemTitle={checkoutItem.title}
+          amount={checkoutItem.amount}
+          currency={pricing.currency}
+          rzpKey={pricing.rzpKey}
+          onSuccess={(paymentId) => {
+            showToast("Upgrade Successful! Personal Cloud Pro Unlocked.", "success");
+            setIsCheckoutOpen(false);
+          }}
+          onAlert={(msg, title, type) => {
+            showToast(msg, type === "error" ? "error" : "info");
+          }}
         />
       )}
     </div>

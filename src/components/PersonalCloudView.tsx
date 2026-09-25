@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { doc, onSnapshot } from "firebase/firestore";
+import { firestore } from "../utils/firebase";
 import ScrollReveal from "./ScrollReveal";
 
 interface PersonalCloudViewProps {
@@ -9,6 +11,20 @@ interface PersonalCloudViewProps {
   onBuyPro: (item: { id: string; title: string; amount: number }) => void;
   onOpenTrial?: () => void;
   onToast: (msg: string, type: "success" | "error" | "info") => void;
+}
+
+export interface StorefrontPlan {
+  id: string;
+  name: string;
+  badge?: string;
+  price: number;
+  originalPrice: number;
+  popular?: boolean;
+  isTrial?: boolean;
+  enabled?: boolean;
+  description: string;
+  features: string[];
+  cta: string;
 }
 
 export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
@@ -25,9 +41,87 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
   const [videoProgress, setVideoProgress] = useState(42);
   const [activeDrive, setActiveDrive] = useState("D:");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [pricingConfig, setPricingConfig] = useState<Record<string, any> | null>(null);
 
-  // Pricing plans exactly from website/src/components/Pricing.js
-  const plans = [
+  // Live real-time sync with Admin Pricing Management
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(firestore, "config", "personal_cloud_pricing"),
+      (snap) => {
+        if (snap.exists() && snap.data()?.plans) {
+          setPricingConfig(snap.data().plans);
+        }
+      },
+      (err) => {
+        console.warn("Could not fetch real-time pricing config:", err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const rawStarter = pricingConfig?.starter || {
+    id: "starter",
+    name: "Starter Edition",
+    badge: "ENTRY LEVEL",
+    tagline: "Ideal for accessing photos, documents, and files remotely from your phone.",
+    price: 499,
+    originalPrice: 1499,
+    usdPrice: 9.99,
+    popular: false,
+    enabled: true,
+    features: [
+      "1 Windows PC License (Lifetime)",
+      "Unlimited Personal Storage",
+      "Native Desktop File Explorer",
+      "QuickDrop P2P File Sharing",
+      "4-Digit Master PIN Lock",
+      "Lifetime Free Updates",
+    ],
+  };
+
+  const rawPro = pricingConfig?.pro || {
+    id: "pro",
+    name: "Pro Security Edition",
+    badge: "MOST POPULAR • BEST VALUE",
+    tagline: "The complete powerhouse: 4K streaming, screen mirror, volume mixer & dual-secret security.",
+    price: 999,
+    originalPrice: 2999,
+    usdPrice: 19.99,
+    popular: true,
+    enabled: true,
+    features: [
+      "2 Windows PC Licenses (Work + Home)",
+      "4K Hardware-Accelerated Video Transcoder",
+      "60 FPS Low-Latency Screen Mirroring",
+      "Native Windows Audio Mixer (Per-App)",
+      "Automated Cloudflare SSL Zero-Config Tunnel",
+      "Telegram & Discord Security Bot Alerts",
+      "Secret Emergency Word Access",
+      "Priority VIP Customer Support",
+    ],
+  };
+
+  const rawFamily = pricingConfig?.family || {
+    id: "family",
+    name: "Family & Power Bundle",
+    badge: "3 LICENSES",
+    tagline: "For power users with multiple PCs or families wanting their own private clouds.",
+    price: 1499,
+    originalPrice: 4499,
+    usdPrice: 29.99,
+    popular: false,
+    enabled: true,
+    features: [
+      "Up to 5 Windows PC Licenses",
+      "Independent PIN & Access Folders for Each Member",
+      "Full 4K Video Streaming & Screen Mirroring",
+      "All Pro Features Included on All 5 PCs",
+      "Priority Remote Setup Assistance",
+      "Commercial Lifetime License",
+    ],
+  };
+
+  const allPlans: StorefrontPlan[] = [
     {
       id: "trial",
       name: "30-Day Free Trial",
@@ -35,6 +129,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       originalPrice: currency === "INR" ? 499 : 9.99,
       popular: false,
       isTrial: true,
+      enabled: true,
       description: "Full-featured access on 1 PC. Zero commitment, no payment details required.",
       features: [
         "Full 30-Day Unlimited Access",
@@ -46,66 +141,46 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       ],
       cta: "Start 30-Day Free Trial",
     },
-    
     {
       id: "starter",
-      name: "Starter Edition",
-      badge: "ENTRY LEVEL",
-      price: currency === "INR" ? 499 : 9.99,
-      originalPrice: currency === "INR" ? 1499 : 29.99,
-      description: "Ideal for accessing photos, documents, and files remotely from your phone.",
-      features: [
-        "1 PC Server License (Lifetime)",
-        "Unlimited Storage (Full PC Hard Drives)",
-        "Mobile File Explorer & Photo Viewer",
-        "QuickDrop High-Speed P2P Transfers",
-        "Local Wi-Fi & 4G/5G Remote Access",
-        "Master PIN Security Gate",
-        "Zero Cloud Storage Fees Forever",
-      ],
-      popular: false,
-      cta: currency === "INR" ? "Get Starter (₹499)" : "Get Starter ($9.99)",
+      name: rawStarter.name || "Starter Edition",
+      badge: rawStarter.badge || "ENTRY LEVEL",
+      price: currency === "INR" ? (rawStarter.price ?? 499) : (rawStarter.usdPrice ?? 9.99),
+      originalPrice: currency === "INR" ? (rawStarter.originalPrice ?? 1499) : (rawStarter.usdPrice ? rawStarter.usdPrice * 3 : 29.99),
+      description: rawStarter.tagline || rawStarter.description || "Ideal for accessing photos, documents, and files remotely from your phone.",
+      features: rawStarter.features || [],
+      popular: Boolean(rawStarter.popular),
+      enabled: rawStarter.enabled !== false,
+      cta: currency === "INR" ? `Get Starter (₹${rawStarter.price ?? 499})` : `Get Starter ($${rawStarter.usdPrice ?? 9.99})`,
     },
     {
       id: "pro",
-      name: "Pro Security Edition",
-      badge: "MOST POPULAR • BEST VALUE",
-      price: currency === "INR" ? 999 : 19.99,
-      originalPrice: currency === "INR" ? 2999 : 59.99,
-      description: "The complete powerhouse: 4K streaming, screen mirror, volume mixer & dual-secret security.",
-      features: [
-        "Everything in Starter Edition, plus:",
-        "🎬 4K Ultra-HD Video Transcoder & Subtitles",
-        "🖥️ 60 FPS Desktop Screen Mirror & Touchpad",
-        "🎚️ Per-App Audio Mixer & Task Manager Killer",
-        "🔒 Master PIN + Secret Emergency Word",
-        "⚡ Ephemeral Public Sessions (Memory-only token)",
-        "🚀 Cloudflare Zero-Config Tunnel & SSL",
-        "🔔 Telegram & Discord Live Link Auto-Alerts",
-        "📦 Lifetime Software Updates Included",
-      ],
-      popular: true,
-      cta: currency === "INR" ? "Get Pro License (₹999)" : "Get Pro License ($19.99)",
+      name: rawPro.name || "Pro Security Edition",
+      badge: rawPro.badge || "MOST POPULAR • BEST VALUE",
+      price: currency === "INR" ? (rawPro.price ?? 999) : (rawPro.usdPrice ?? 19.99),
+      originalPrice: currency === "INR" ? (rawPro.originalPrice ?? 2999) : (rawPro.usdPrice ? rawPro.usdPrice * 3 : 59.99),
+      description: rawPro.tagline || rawPro.description || "The complete powerhouse: 4K streaming, screen mirror, volume mixer & dual-secret security.",
+      features: rawPro.features || [],
+      popular: rawPro.popular !== undefined ? Boolean(rawPro.popular) : true,
+      enabled: rawPro.enabled !== false,
+      cta: currency === "INR" ? `Get Pro License (₹${rawPro.price ?? 999})` : `Get Pro License ($${rawPro.usdPrice ?? 19.99})`,
     },
     {
       id: "family",
-      name: "Family & Power Bundle",
-      badge: "3 LICENSES",
-      price: currency === "INR" ? 1499 : 29.99,
-      originalPrice: currency === "INR" ? 4499 : 89.99,
-      description: "For power users with multiple PCs or families wanting their own private clouds.",
-      features: [
-        "3 PC Server Lifetime Licenses",
-        "All Pro Security Edition Features on All 3 PCs",
-        "Independent PINs and Drives for Each PC",
-        "Priority Software Support",
-        "Remote Installation & Setup Assistance",
-        "Lifetime Updates for All 3 Licenses",
-      ],
-      popular: false,
-      cta: currency === "INR" ? "Get 3-PC Bundle (₹1,499)" : "Get 3-PC Bundle ($29.99)",
+      name: rawFamily.name || "Family & Power Bundle",
+      badge: rawFamily.badge || "BEST VALUE",
+      price: currency === "INR" ? (rawFamily.price ?? 1499) : (rawFamily.usdPrice ?? 29.99),
+      originalPrice: currency === "INR" ? (rawFamily.originalPrice ?? 4499) : (rawFamily.usdPrice ? rawFamily.usdPrice * 3 : 89.99),
+      description: rawFamily.tagline || rawFamily.description || "Total private cloud freedom across multiple family computers.",
+      features: rawFamily.features || [],
+      popular: Boolean(rawFamily.popular),
+      enabled: rawFamily.enabled !== false,
+      cta: currency === "INR" ? `Get Bundle (₹${rawFamily.price ?? 1499})` : `Get Bundle ($${rawFamily.usdPrice ?? 29.99})`,
     },
   ];
+
+  // ONLY show enabled/live plans (hidden plans in admin dashboard are excluded)
+  const plans = allPlans.filter((p) => p.enabled !== false);
 
   // Features exactly from website/src/components/FeatureGrid.js
   const features = [
@@ -242,16 +317,16 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
 
   return (
     <div className="flex flex-col gap-16 lg:gap-24 pb-24 text-gray-200">
-      
+
       {/* ========================================================
           1. HERO SECTION (Exactly from Hero.js)
          ======================================================== */}
       <section className="relative pt-6 md:pt-10 overflow-hidden text-center">
         {/* Glow Effects */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[720px] h-[360px] bg-gradient-to-tr from-brand-500/20 via-blue-500/10 to-transparent blur-[120px] pointer-events-none rounded-full" />
-        
+
         <div className="container mx-auto px-4 sm:px-6 max-w-6xl relative z-10">
-          
+
           {/* Top Product Pill */}
           <div className="inline-flex mb-6">
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow-lg shadow-blue-500/10">
@@ -474,11 +549,10 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  activeTab === tab.id
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${activeTab === tab.id
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-105"
                     : "bg-[#141422] text-gray-400 hover:text-white hover:bg-white/10"
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -506,9 +580,8 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                       <button
                         key={d}
                         onClick={() => { setActiveDrive(d); onToast(`Browsing drive ${d}\\`, "info"); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          activeDrive === d ? "bg-blue-600 text-white" : "bg-white/5 text-gray-400 hover:text-white"
-                        }`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeDrive === d ? "bg-blue-600 text-white" : "bg-white/5 text-gray-400 hover:text-white"
+                          }`}
                       >
                         {d} Drive
                       </button>
@@ -755,80 +828,85 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       {/* ========================================================
           6. PRICING SECTION (Exactly from Pricing.js)
          ======================================================== */}
-      <ScrollReveal className="container mx-auto px-4 sm:px-6 max-w-6xl text-center">
-        <span className="text-xs font-bold text-brand-400 uppercase tracking-widest block mb-2">TRANSPARENT ONE-TIME PRICING</span>
-        <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">
-          Pay Once. <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Own Your Cloud Forever.</span>
-        </h2>
-        <p className="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto mb-12">
-          Zero subscriptions. Zero hidden fees. 30-day money-back guarantee.
-        </p>
+      <div id="pricing-section" className="scroll-mt-24">
+        <ScrollReveal className="container mx-auto px-4 sm:px-6 max-w-6xl text-center">
+          <span className="text-xs font-bold text-brand-400 uppercase tracking-widest block mb-2">TRANSPARENT ONE-TIME PRICING</span>
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">
+            Pay Once. <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Own Your Cloud Forever.</span>
+          </h2>
+          <p className="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto mb-12">
+            Zero subscriptions. Zero hidden fees. 30-day money-back guarantee.
+          </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left items-stretch">
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all shadow-xl ${
-                plan.popular
-                  ? "bg-gradient-to-b from-[#161e30] to-[#0c111c] border-2 border-blue-500/60 shadow-[0_0_40px_rgba(59,130,246,0.2)] md:-translate-y-2"
-                  : "bg-[#0c0f18] border border-white/10"
-              }`}
-            >
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className={`font-mono text-[10px] font-extrabold tracking-wider ${plan.popular ? "text-blue-400" : "text-gray-400"}`}>
-                    {plan.badge}
-                  </span>
-                  {plan.popular && (
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
-                      SAVE 67%
-                    </span>
-                  )}
-                </div>
+          <div className={`grid grid-cols-1 ${plans.length === 2 ? "md:grid-cols-2 max-w-3xl mx-auto" : plans.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 lg:grid-cols-4"} gap-6 text-left items-stretch`}>
+            {plans.map((plan) => {
+              const discountPercent = plan.originalPrice > plan.price && plan.price > 0
+                ? Math.round(((plan.originalPrice - plan.price) / plan.originalPrice) * 100)
+                : 0;
 
-                <h3 className="text-xl sm:text-2xl font-black text-white mb-2">{plan.name}</h3>
-                <p className="text-gray-400 text-xs sm:text-sm min-h-[40px] leading-relaxed mb-6">{plan.description}</p>
+              return (
+                <div
+                  key={plan.id}
+                  className={`rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all shadow-xl ${plan.popular
+                      ? "bg-gradient-to-b from-[#161e30] to-[#0c111c] border-2 border-blue-500/60 shadow-[0_0_40px_rgba(59,130,246,0.2)] md:-translate-y-2"
+                      : "bg-[#0c0f18] border border-white/10"
+                    }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className={`font-mono text-[10px] font-extrabold tracking-wider ${plan.popular ? "text-blue-400" : "text-gray-400"}`}>
+                        {plan.badge}
+                      </span>
+                      {discountPercent > 0 && (
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                          SAVE {discountPercent}%
+                        </span>
+                      )}
+                    </div>
 
-                <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-4xl sm:text-5xl font-black text-white">
-                    {currency === "INR" ? "₹" : "$"}{plan.price}
-                  </span>
-                  <span className="text-sm text-gray-500 line-through">
-                    {currency === "INR" ? "₹" : "$"}{plan.originalPrice}
-                  </span>
-                  <span className="text-xs text-emerald-400 font-bold ml-1">One-Time</span>
-                </div>
+                    <h3 className="text-xl sm:text-2xl font-black text-white mb-2">{plan.name}</h3>
+                    <p className="text-gray-400 text-xs sm:text-sm min-h-[40px] leading-relaxed mb-6">{plan.description}</p>
 
-                <div className="pt-4 border-t border-white/10 mb-6">
-                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Included Features:
+                    <div className="flex items-baseline gap-2 mb-6">
+                      <span className="text-4xl sm:text-5xl font-black text-white">
+                        {currency === "INR" ? "₹" : "$"}{plan.price}
+                      </span>
+                      <span className="text-sm text-gray-500 line-through">
+                        {currency === "INR" ? "₹" : "$"}{plan.originalPrice}
+                      </span>
+                      <span className="text-xs text-emerald-400 font-bold ml-1">One-Time</span>
+                    </div>
+
+                    <div className="pt-4 border-t border-white/10 mb-6">
+                      <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                        Included Features:
+                      </div>
+                      <ul className="space-y-2.5 text-xs text-gray-300">
+                        {plan.features.map((feat: string, i: number) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <i className="fa-solid fa-check text-emerald-400 text-xs shrink-0 mt-0.5"></i>
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                  <ul className="space-y-2.5 text-xs text-gray-300">
-                    {plan.features.map((feat, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <i className="fa-solid fa-check text-emerald-400 text-xs shrink-0 mt-0.5"></i>
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+                  <button
+                    onClick={() => (plan as any).isTrial ? (onOpenTrial && onOpenTrial()) : onBuyPro({ id: `personal-cloud-${plan.id}`, title: `Personal Cloud - ${plan.name}`, amount: plan.price })}
+                    className={`w-full py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${plan.popular
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30"
+                        : "bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                      }`}
+                  >
+                    <span>{plan.cta}</span>
+                  </button>
                 </div>
-              </div>
-
-              <button
-                onClick={() => (plan as any).isTrial ? (onOpenTrial && onOpenTrial()) : onBuyPro({ id: plan.id, title: `Personal Cloud - ${plan.name}`, amount: plan.price })}
-                className={`w-full py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                  plan.popular
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30"
-                    : "bg-white/10 hover:bg-white/20 text-white border border-white/10"
-                }`}
-              >
-                <span>{plan.cta}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      </ScrollReveal>
-
+              );
+            })}
+          </div>
+        </ScrollReveal>
+      </div>
 
       {/* ========================================================
           7. FAQ SECTION (Exactly from FAQ.js)

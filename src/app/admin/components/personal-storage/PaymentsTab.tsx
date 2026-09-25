@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { firestore as db } from "@/utils/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 
 export interface PaymentRecord {
   id: string;
@@ -151,6 +151,23 @@ export default function PaymentsTab({ payments, onRefresh }: PaymentsTabProps) {
       if (onRefresh) onRefresh();
     } catch (err: any) {
       alert("Error updating refund status: " + err.message);
+    }
+  };
+
+  // Delete Payment record
+  const handleDeletePayment = async (p: PaymentRecord) => {
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete payment record ${p.paymentId || p.id}?`
+      )
+    )
+      return;
+
+    try {
+      await deleteDoc(doc(db, "payments", p.id));
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert("Error deleting payment: " + err.message);
     }
   };
 
@@ -364,10 +381,17 @@ export default function PaymentsTab({ payments, onRefresh }: PaymentsTabProps) {
                             className={`p-1.5 rounded text-xs transition ${
                               isRefunded
                                 ? "text-slate-500 hover:text-white hover:bg-white/5"
-                                : "text-slate-400 hover:text-rose-400 hover:bg-rose-400/10"
+                                : "text-slate-400 hover:text-amber-400 hover:bg-amber-400/10"
                             }`}
                           >
                             <i className="fa-solid fa-undo"></i>
+                          </button>
+                          <button
+                            onClick={() => handleDeletePayment(p)}
+                            title="Delete Payment Record"
+                            className="p-1.5 rounded text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 transition"
+                          >
+                            <i className="fa-solid fa-trash"></i>
                           </button>
                         </div>
                       </td>
