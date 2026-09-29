@@ -94,6 +94,12 @@ function CloudGatewayContent() {
         throw new Error(data.error || "Unable to find your Personal Cloud server.");
       }
 
+      if (identifier.type === "email" && data.gateway?.email && data.gateway.email.toLowerCase().trim() !== identifier.value.toLowerCase().trim()) {
+        setGateway(null);
+        setError("No active Personal Cloud registered for this account.");
+        return;
+      }
+
       setGateway(data.gateway);
       if (typeof window !== "undefined") {
         if (identifier.type === "email") {

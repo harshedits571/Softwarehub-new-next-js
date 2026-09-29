@@ -244,7 +244,13 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
       const matchKey = l.key?.toLowerCase().includes(q);
       const matchName = l.customerName?.toLowerCase().includes(q);
       const matchEmail = l.customerEmail?.toLowerCase().includes(q);
-      const matchDevice = l.devices?.some((d) => d.machineGuid?.toLowerCase().includes(q) || d.machineName?.toLowerCase().includes(q));
+      const matchDevice = l.devices?.some((d: any) => 
+        d.machineGuid?.toLowerCase().includes(q) || 
+        d.machineId?.toLowerCase().includes(q) || 
+        d.id?.toLowerCase().includes(q) || 
+        d.machineName?.toLowerCase().includes(q) ||
+        d.name?.toLowerCase().includes(q)
+      );
       if (!matchKey && !matchName && !matchEmail && !matchDevice) return false;
     }
     return true;
@@ -298,8 +304,8 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
         devices: [],
         issueDate: serverTimestamp(),
         createdAt: new Date().toISOString(),
-        trialStartDate: isTrial ? new Date().toISOString() : undefined,
-        trialEndDate: isTrial ? computedExpiry : undefined,
+        trialStartDate: isTrial ? new Date().toISOString() : null,
+        trialEndDate: isTrial ? computedExpiry : null,
         expiryDate: computedExpiry,
       };
 
@@ -1109,7 +1115,7 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
                     No machines bound yet. License is ready for first activation on customer's PC.
                   </div>
                 ) : (
-                  viewingDevices.devices.map((d, idx) => (
+                  viewingDevices.devices.map((d: any, idx) => (
                     <div
                       key={idx}
                       className="p-3 bg-[#0a0d14] rounded-lg border border-white/10 flex items-center justify-between text-xs"
@@ -1117,17 +1123,22 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
                       <div>
                         <div className="font-semibold text-white flex items-center gap-2">
                           <i className="fa-solid fa-desktop text-cyan-400"></i>
-                          {d.machineName || `Machine #${idx + 1}`}
+                          {d.machineName || d.name || `Machine #${idx + 1}`}
                         </div>
-                        <div className="font-mono text-[10px] text-slate-400 mt-0.5">
-                          GUID: {d.machineGuid}
+                        <div className="font-mono text-[10px] text-cyan-300 mt-0.5 select-all">
+                          ID: {d.machineId || d.machineGuid || d.id || "N/A"}
                         </div>
+                        {d.activatedAt && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Activated: {new Date(d.activatedAt).toLocaleString()}
+                          </div>
+                        )}
                         {d.osVersion && (
                           <div className="text-[10px] text-slate-500">OS: {d.osVersion}</div>
                         )}
                       </div>
-                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-medium">
-                        Bound
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-medium">
+                        Active & Bound
                       </span>
                     </div>
                   ))

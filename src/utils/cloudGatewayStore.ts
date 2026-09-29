@@ -77,22 +77,61 @@ loadFromDisk();
 
 export function setGatewayRecord(record: GatewayRecord) {
   loadFromDisk();
-  // Key by licenseKey, but if email is present, remove old stale records for this email under different keys
-  if (record.email) {
-    const cleanEmail = record.email.toLowerCase().trim();
-    for (const [key, item] of gatewayMap.entries()) {
-      if (item.email && item.email.toLowerCase().trim() === cleanEmail && key !== record.licenseKey.toUpperCase()) {
+  const cleanKey = record.licenseKey.toUpperCase().trim();
+  const cleanEmail = record.email ? record.email.toLowerCase().trim() : "";
+  const cleanMachineId = record.machineId ? record.machineId.toLowerCase().trim() : "";
+  const cleanTunnel = record.tunnelUrl ? record.tunnelUrl.toLowerCase().trim() : "";
+
+  // 1. If this machineId, tunnelUrl, or email was previously registered under ANY OTHER key:
+  // Purge the old record immediately so other accounts CANNOT see or access this machine's tunnel!
+  for (const [key, item] of gatewayMap.entries()) {
+    if (key !== cleanKey) {
+      const matchMachine = cleanMachineId && item.machineId && item.machineId.toLowerCase().trim() === cleanMachineId;
+      const matchTunnel = cleanTunnel && item.tunnelUrl && item.tunnelUrl.toLowerCase().trim() === cleanTunnel;
+      const matchEmail = cleanEmail && item.email && item.email.toLowerCase().trim() === cleanEmail;
+
+      if (matchMachine || matchTunnel || matchEmail) {
         gatewayMap.delete(key);
       }
     }
   }
-  gatewayMap.set(record.licenseKey.toUpperCase(), record);
+
+  if (record.status === "offline") {
+    record.tunnelUrl = null;
+  }
+
+  gatewayMap.set(cleanKey, record);
+  saveToDisk();
+}
+
+export function purgeGatewayByEmail(email: string) {
+  loadFromDisk();
+  const cleanEmail = email.toLowerCase().trim();
+  for (const [key, item] of gatewayMap.entries()) {
+    if (item.email && item.email.toLowerCase().trim() === cleanEmail) {
+      gatewayMap.delete(key);
+    }
+  }
   saveToDisk();
 }
 
 export function getGatewayByKey(key: string): GatewayRecord | null {
   loadFromDisk();
-  return gatewayMap.get(key.toUpperCase()) || null;
+  const item = gatewayMap.get(key.toUpperCase().trim()) || null;
+  if (!item) return null;
+  if (item.status === "offline" || !item.tunnelUrl) return null;
+  
+  // Heartbeat must be fresh within 3 minutes (180,000 ms)
+  const itemTime = item.lastHeartbeat
+    ? new Date(item.lastHeartbeat).getTime()
+    : item.updatedAt
+    ? new Date(item.updatedAt).getTime()
+    : 0;
+  if (itemTime && Date.now() - itemTime > 3 * 60 * 1000) {
+    return null;
+  }
+
+  return item;
 }
 
 export function getGatewayByEmail(email: string): GatewayRecord | null {
@@ -103,11 +142,22 @@ export function getGatewayByEmail(email: string): GatewayRecord | null {
 
   for (const item of gatewayMap.values()) {
     if (item.email && item.email.toLowerCase().trim() === cleanEmail) {
+      // Must be online and have a valid tunnelUrl
+      if (item.status === "offline" || !item.tunnelUrl) {
+        continue;
+      }
+
       const itemTime = item.lastHeartbeat
         ? new Date(item.lastHeartbeat).getTime()
         : item.updatedAt
         ? new Date(item.updatedAt).getTime()
         : 0;
+
+      // Heartbeat must be fresh within 3 minutes
+      if (itemTime && Date.now() - itemTime > 3 * 60 * 1000) {
+        continue;
+      }
+
       if (!latestMatch || itemTime >= latestTime) {
         latestMatch = item;
         latestTime = itemTime;

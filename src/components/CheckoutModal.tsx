@@ -425,8 +425,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     {
                       leadStatus: "Verified",
                       paymentStatus: "Paid",
+                      status: "Paid",
                       purchaseDate: Timestamp.now(),
                       amountPaid: amount,
+                      amount: amount,
                       paymentId: paymentId,
                       orderId: orderId || null,
                       licenseKey: generatedKey,
@@ -434,8 +436,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       activityHistory: [
                         ...existingHistory,
                         {
-                          action: "Payment Verified via Razorpay",
-                          status: "Verified",
+                          action: "Payment Verified & License Key Issued",
+                          status: "Paid",
+                          leadStatus: "Verified",
                           paymentId: paymentId,
                           orderId: orderId || null,
                           amount: amount,

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { setGatewayRecord, GatewayRecord } from "@/utils/cloudGatewayStore";
 
 export const dynamic = "force-dynamic";
@@ -52,11 +52,32 @@ export async function POST(req: NextRequest) {
     try {
       const { adminFirestore } = await import("@/utils/firebase-admin");
       if (adminFirestore) {
-        adminFirestore
-          .collection("cloud_gateways")
-          .doc(cleanKey)
-          .set(gatewayPayload, { merge: true })
-          .catch((e: any) => console.warn("adminFirestore cloud_gateways sync warning:", e?.message));
+        if (cleanStatus === "offline") {
+          // Mark offline and strip tunnelUrl in Firestore
+          await adminFirestore.collection("cloud_gateways").doc(cleanKey).set({
+            ...gatewayPayload,
+            tunnelUrl: null,
+            status: "offline",
+          }, { merge: true }).catch(() => {});
+        } else {
+          // If online, purge any other documents with the SAME machineId or tunnelUrl
+          if (machineId) {
+            try {
+              const oldSnaps = await adminFirestore.collection("cloud_gateways").where("machineId", "==", machineId).get();
+              for (const oldDoc of oldSnaps.docs) {
+                if (oldDoc.id !== cleanKey) {
+                  await oldDoc.ref.set({ status: "offline", tunnelUrl: null, updatedAt: nowIso }, { merge: true });
+                }
+              }
+            } catch (e) {}
+          }
+
+          await adminFirestore
+            .collection("cloud_gateways")
+            .doc(cleanKey)
+            .set(gatewayPayload, { merge: true })
+            .catch((e: any) => console.warn("adminFirestore cloud_gateways sync warning:", e?.message));
+        }
       }
     } catch (e) {
       // Ignore background firestore error

@@ -64,14 +64,19 @@ export default function PersonalStorageDashboard() {
         snapshot.forEach((doc) => {
           const data = doc.data();
           // Include if product is personal_cloud or untyped
+          const hasKey = Boolean(data.licenseKey || data.key);
+          const isPaid = data.paymentStatus === "Paid" || data.status === "Paid" || data.leadStatus === "Verified" || Boolean(data.paymentId);
+          const derivedLeadStatus = data.leadStatus || (hasKey ? "Verified" : isPaid ? "Paid" : data.status || "Interested");
+          const derivedPaymentStatus = data.paymentStatus || (isPaid || hasKey ? "Paid" : "Pending");
+
           items.push({
             id: doc.id,
             name: data.name || data.customerName || "Customer",
             email: data.email || data.customerEmail || "",
             phone: data.phone || data.customerPhone || "",
             plan: data.plan || data.planId || "starter",
-            leadStatus: data.leadStatus || "Interested",
-            paymentStatus: data.paymentStatus || "Pending",
+            leadStatus: derivedLeadStatus,
+            paymentStatus: derivedPaymentStatus,
             amountPaid: data.amountPaid || data.amount || 0,
             licenseKey: data.licenseKey || "",
             registrationDate: data.registrationDate || data.createdAt,

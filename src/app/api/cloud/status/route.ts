@@ -121,13 +121,33 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Determine if machine is currently online based on heartbeat within last 10 minutes
+    // Determine if machine is currently online based on heartbeat within last 3 minutes
     let isLive = gatewayData.status === "online" && Boolean(gatewayData.tunnelUrl);
     if (gatewayData.lastHeartbeat) {
       const diffMs = Date.now() - new Date(gatewayData.lastHeartbeat).getTime();
-      if (diffMs > 10 * 60 * 1000) {
+      if (diffMs > 3 * 60 * 1000) {
         isLive = false;
       }
+    }
+
+    if (!isLive) {
+      return NextResponse.json(
+        {
+          success: true,
+          isRegistered: true,
+          gateway: {
+            licenseKey: gatewayData.licenseKey,
+            email: gatewayData.email,
+            tunnelUrl: null,
+            localUrl: gatewayData.localUrl,
+            machineName: gatewayData.machineName,
+            status: "offline",
+            lastHeartbeat: gatewayData.lastHeartbeat,
+            isLive: false,
+          }
+        },
+        { status: 200, headers: corsHeaders }
+      );
     }
 
     return NextResponse.json(

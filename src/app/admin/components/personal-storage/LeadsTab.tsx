@@ -60,13 +60,20 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
   const handleUpdateStatus = async (leadId: string, nextStatus: string) => {
     try {
       const docRef = doc(firestore, "leads", leadId);
+      const isPaid = nextStatus === "Verified" || nextStatus === "Paid" || nextStatus === "Converted";
       await updateDoc(docRef, {
         leadStatus: nextStatus,
-        status: nextStatus,
+        status: isPaid ? "Paid" : nextStatus,
+        paymentStatus: isPaid ? "Paid" : "Pending",
         updatedAt: Timestamp.now(),
       });
       if (selectedLead && selectedLead.id === leadId) {
-        setSelectedLead({ ...selectedLead, leadStatus: nextStatus, status: nextStatus });
+        setSelectedLead({
+          ...selectedLead,
+          leadStatus: nextStatus,
+          status: isPaid ? "Paid" : nextStatus,
+          paymentStatus: isPaid ? "Paid" : "Pending",
+        });
       }
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -90,14 +97,15 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
     if (!newEmail || !newName) return;
     setIsSubmitting(true);
     try {
+      const isPaid = newStatus === "Verified" || newStatus === "Paid" || newStatus === "Converted";
       await addDoc(collection(firestore, "leads"), {
         customerName: newName,
         email: newEmail.toLowerCase().trim(),
         phone: newPhone.trim(),
         plan: newPlan,
         leadStatus: newStatus,
-        status: newStatus,
-        paymentStatus: newStatus === "Verified" || newStatus === "Converted" ? "Paid" : "Pending",
+        status: isPaid ? "Paid" : newStatus,
+        paymentStatus: isPaid ? "Paid" : "Pending",
         createdAt: Timestamp.now(),
         source: "admin_manual",
         activityHistory: [
@@ -138,8 +146,8 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
       `"${l.email || ""}"`,
       `"${l.phone || ""}"`,
       `"${l.plan || "pro"}"`,
-      `"${l.leadStatus || l.status || "Interested"}"`,
-      `"${l.paymentStatus || "Pending"}"`,
+      `"${l.licenseKey ? "Verified" : l.leadStatus || l.status || "Interested"}"`,
+      `"${l.paymentStatus || (l.licenseKey ? "Paid" : "Pending")}"`,
       `"${l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate().toISOString() : l.createdAt) : ""}"`,
       `"${l.paymentId || ""}"`,
       `"${l.licenseKey || ""}"`,
@@ -177,8 +185,9 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
             className="bg-black/40 border border-white/10 rounded-xl text-xs text-gray-300 px-3 py-2 focus:outline-none focus:border-cyan-500"
           >
             <option value="all">All Statuses</option>
+            <option value="Verified">Verified (License Issued)</option>
+            <option value="Paid">Paid</option>
             <option value="Interested">Interested (Initiated)</option>
-            <option value="Verified">Verified (Paid)</option>
             <option value="Converted">Converted</option>
             <option value="Cancelled">Cancelled</option>
           </select>
@@ -240,8 +249,18 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
                 </tr>
               ) : (
                 filteredLeads.map((lead) => {
-                  const leadStat = lead.leadStatus || lead.status || "Interested";
-                  const isVerified = leadStat === "Verified" || leadStat === "Converted";
+                  const hasLicenseKey = Boolean(lead.licenseKey);
+                  const isPaid = lead.paymentStatus === "Paid" || lead.status === "Paid" || hasLicenseKey;
+                  const leadStat = hasLicenseKey
+                    ? "Verified"
+                    : lead.leadStatus === "Verified"
+                    ? "Verified"
+                    : isPaid
+                    ? "Paid"
+                    : lead.leadStatus || lead.status || "Interested";
+
+                  const isVerified = leadStat === "Verified" || hasLicenseKey;
+                  const isPaidOnly = leadStat === "Paid" && !hasLicenseKey;
                   const isInterested = leadStat === "Interested";
                   const isCancelled = leadStat === "Cancelled";
 
@@ -278,6 +297,8 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase ${
                             isVerified
                               ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                              : isPaidOnly
+                              ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
                               : isInterested
                               ? "bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse"
                               : isCancelled
@@ -287,7 +308,15 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              isVerified ? "bg-emerald-400" : isInterested ? "bg-amber-400" : isCancelled ? "bg-red-400" : "bg-blue-400"
+                              isVerified
+                                ? "bg-emerald-400"
+                                : isPaidOnly
+                                ? "bg-cyan-400"
+                                : isInterested
+                                ? "bg-amber-400"
+                                : isCancelled
+                                ? "bg-red-400"
+                                : "bg-blue-400"
                             }`}
                           ></span>
                           {leadStat}
@@ -298,20 +327,24 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
                       <td className="py-3.5 px-4">
                         <span
                           className={`text-[11px] font-semibold ${
-                            lead.paymentStatus === "Paid"
+                            isPaid
                               ? "text-emerald-400"
                               : lead.paymentStatus === "Failed"
                               ? "text-red-400"
-                              : "text-gray-400"
+                              : "text-amber-400"
                           }`}
                         >
-                          {lead.paymentStatus || (isVerified ? "Paid" : "Pending")}
+                          {isPaid ? "Paid" : lead.paymentStatus || "Pending"}
                         </span>
-                        {lead.amount && (
+                        {lead.amountPaid ? (
+                          <span className="text-[10px] text-gray-500 block">
+                            ₹{lead.amountPaid}
+                          </span>
+                        ) : lead.amount ? (
                           <span className="text-[10px] text-gray-500 block">
                             ₹{lead.amount}
                           </span>
-                        )}
+                        ) : null}
                       </td>
 
                       {/* Date */}
@@ -340,11 +373,11 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
                           </button>
 
                           {/* Quick Verified toggle */}
-                          {leadStat !== "Verified" ? (
+                          {!isVerified ? (
                             <button
                               onClick={() => handleUpdateStatus(lead.id, "Verified")}
                               className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
-                              title="Mark as Verified (Payment Succeeded)"
+                              title="Mark as Verified (License Key Issued)"
                             >
                               <i className="fa-solid fa-check text-xs"></i>
                             </button>
@@ -466,7 +499,7 @@ export default function LeadsTab({ leads, onRefresh }: LeadsTabProps) {
             <div className="pt-4 border-t border-white/5 flex items-center justify-between">
               <span className="text-xs text-gray-400">Override Status:</span>
               <div className="flex items-center gap-2">
-                {["Interested", "Verified", "Converted", "Cancelled"].map((st) => (
+                {["Verified", "Paid", "Interested", "Converted", "Cancelled"].map((st) => (
                   <button
                     key={st}
                     onClick={() => handleUpdateStatus(selectedLead.id, st)}
