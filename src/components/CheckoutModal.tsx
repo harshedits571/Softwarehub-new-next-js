@@ -349,7 +349,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         handler: async function (response: any) {
           if (response.razorpay_payment_id) {
             try {
-              // Verify payment signature
+              // Verify payment signature & update permissions securely on backend
               const verifyRes = await fetch("/api/verify-payment", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -357,10 +357,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
-                  productId: itemId || "PRO_BUNDLE",
+                  userId: authenticatedUser?.uid || null,
                   userEmail: userEmail,
+                  isProMembership: isProMembership,
+                  productId: itemId || (isProMembership ? "PRO_BUNDLE" : "software_item"),
+                  productTitle: itemTitle || (isProMembership ? "Pro Membership" : "Software Access"),
                   amount: amount,
                   currency: currency,
+                  customerName: name || authenticatedUser?.displayName || "Customer",
+                  vendorId: vendorId || "platform",
+                  creatorLinkedAccountId: creatorRzpAccount || "",
                 }),
               });
 
@@ -420,7 +426,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     }, { merge: true });
                   }
                 } catch (licErr) {
-                  console.error("Failed to write license to Firestore:", licErr);
+                  console.warn("Personal cloud license logging note:", licErr);
                 }
 
                 // Update lead status to Verified
@@ -489,27 +495,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   console.warn("Could not write payment to payments collection:", payDocErr);
                 }
 
-                // Also log general transaction
-                try {
-                  await addDoc(collection(firestore, "transactions"), {
-                    uid: authenticatedUser?.uid || null,
-                    email: userEmail,
-                    userName: name || authenticatedUser?.displayName || "Customer",
-                    amount: amount,
-                    currency: currency,
-                    itemId: itemId || `personal-cloud-${planType}`,
-                    itemTitle: itemTitle || `Personal Cloud ${planType.toUpperCase()}`,
-                    paymentId: paymentId,
-                    orderId: orderId || null,
-                    type: "personal_cloud",
-                    vendorId: "platform",
-                    gateway: "razorpay",
-                    status: "captured",
-                    licenseKey: generatedKey,
-                    timestamp: Timestamp.now(),
-                  });
-                } catch (txErr) {}
-
                 setSuccessData({
                   type: "personal_cloud",
                   title: `Personal Cloud ${planType.toUpperCase()} Activated`,
@@ -525,70 +510,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 return;
               }
 
-              // === CASE 2: WEBSITE PRO MEMBERSHIP (₹10) OR SOFTWARE/PLUGIN PURCHASE ===
-              // (Grants access ONLY to download software & plugins on the website - NO Personal Cloud license generated)
-              if (authenticatedUser) {
-                const userDocRef = doc(firestore, "users", authenticatedUser.uid);
-                const userSnap = await getDoc(userDocRef);
-                const userData = userSnap.exists() ? userSnap.data() : {};
-                const updatedPurchased = { ...(userData?.purchased || {}) };
-
-                if (isProMembership) {
-                  updatedPurchased["PRO_BUNDLE"] = true;
-                } else if (itemId) {
-                  updatedPurchased[itemId] = true;
-                }
-
-                await setDoc(userDocRef, {
-                  isPaid: isProMembership ? true : (userData.isPaid || false),
-                  purchased: updatedPurchased,
-                  paymentId: paymentId,
-                  paidAt: Timestamp.now(),
-                  updatedAt: Timestamp.now(),
-                }, { merge: true });
-              }
-
-              // Log transaction for website revenue / creator payouts
-              try {
-                await addDoc(collection(firestore, "transactions"), {
-                  uid: authenticatedUser?.uid || null,
-                  email: userEmail,
-                  userName: name || authenticatedUser?.displayName || "Customer",
-                  amount: amount,
-                  currency: currency,
-                  itemId: isProMembership ? "PRO_BUNDLE" : (itemId || "software_item"),
-                  itemTitle: itemTitle || (isProMembership ? "Pro Membership" : "Software Access"),
-                  paymentId: paymentId,
-                  orderId: orderId || null,
-                  type: isProMembership ? "pro_membership" : "individual",
-                  vendorId: vendorId || "platform",
-                  payoutAccountId: creatorRzpAccount || "",
-                  gateway: "razorpay",
-                  status: "captured",
-                  timestamp: Timestamp.now(),
-                });
-              } catch (txErr) {
-                console.warn("Could not log store transaction:", txErr);
-              }
-
-              // Update customer store spend stats
-              try {
-                const custDocRef = doc(firestore, "customers", userEmail);
-                const custSnap = await getDoc(custDocRef);
-                const custData = custSnap.exists() ? custSnap.data() : {};
-                const spent = (custData?.totalSpent || 0) + amount;
-                const orders = (custData?.ordersCount || 0) + 1;
-
-                await setDoc(custDocRef, {
-                  phone: customerPhone,
-                  name: name || authenticatedUser?.displayName || "Customer",
-                  totalSpent: spent,
-                  ordersCount: orders,
-                  lastOrderDate: Timestamp.now(),
-                  firstOrderDate: custData?.firstOrderDate || Timestamp.now(),
-                }, { merge: true });
-              } catch (custErr) {}
-
+              // === CASE 2: WEBSITE PRO MEMBERSHIP OR SOFTWARE/PLUGIN PURCHASE ===
+              // (Access is already verified and permissions granted securely on the server via verify-payment API)
               setSuccessData({
                 type: isProMembership ? "website_pro" : "software_download",
                 title: isProMembership ? "Website Lifetime Pro Access Unlocked" : (itemTitle || "Software Access Unlocked"),
@@ -598,8 +521,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               });
               onSuccess(paymentId);
             } catch (err) {
-              console.error("Error executing payment updates:", err);
-              onAlert("Payment successful, but database logs failed. Please contact support.", "DB Error", "error");
+              console.error("Payment verification or completion error:", err);
+              onAlert("Payment was received, but there was an issue completing the verification. Please check your account or contact support.", "Verification Error", "error");
             }
           }
         },

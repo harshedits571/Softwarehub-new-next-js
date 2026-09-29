@@ -335,7 +335,7 @@ export const ProductDrawer: React.FC<ProductDrawerProps> = ({
                                   <i className="fa-solid fa-bolt-lightning text-[10px]"></i>
                                   {((!version.price && !item?.price) || Number(version.price || item?.price || 0) === 0) 
                                     ? "Download for Free"
-                                    : (item?.id && userProfile?.purchased?.[item.id]) || userProfile?.role === "admin" || userProfile?.role === "creator"
+                                    : userProfile?.isPaid || !!userProfile?.purchased?.["PRO_BUNDLE"] || (item?.id && userProfile?.purchased?.[item.id]) || userProfile?.role === "admin" || userProfile?.role === "creator"
                                     ? "Download"
                                     : "Buy Now"}
                                 </button>
@@ -354,7 +354,7 @@ export const ProductDrawer: React.FC<ProductDrawerProps> = ({
                           <i className="fa-solid fa-download"></i>
                           {(!item?.price || Number(item?.price) === 0) 
                             ? "Download for Free"
-                            : (item?.id && userProfile?.purchased?.[item.id]) || userProfile?.role === "admin" || userProfile?.role === "creator"
+                            : userProfile?.isPaid || !!userProfile?.purchased?.["PRO_BUNDLE"] || (item?.id && userProfile?.purchased?.[item.id]) || userProfile?.role === "admin" || userProfile?.role === "creator"
                             ? "Download"
                             : "Buy Now"}
                         </button>
