@@ -511,7 +511,67 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               }
 
               // === CASE 2: WEBSITE PRO MEMBERSHIP OR SOFTWARE/PLUGIN PURCHASE ===
-              // (Access is already verified and permissions granted securely on the server via verify-payment API)
+              if (authenticatedUser) {
+                try {
+                  const userDocRef = doc(firestore, "users", authenticatedUser.uid);
+                  const userProfileSnap = await getDoc(userDocRef);
+                  const userProfileData = userProfileSnap.exists() ? userProfileSnap.data() : {};
+                  
+                  const updatedPurchased = { ...(userProfileData?.purchased || {}) };
+                  if (itemId) {
+                    updatedPurchased[itemId] = true;
+                  } else {
+                    updatedPurchased["PRO_BUNDLE"] = true; // Pro Membership Token
+                  }
+
+                  await updateDoc(userDocRef, {
+                    paymentId: paymentId,
+                    paidAt: Timestamp.now(),
+                    purchased: updatedPurchased,
+                  });
+                } catch (userUpErr) {
+                  console.warn("Client user permission update note:", userUpErr);
+                }
+              }
+
+              // Log transaction for platform & creator payouts
+              try {
+                const platformFee = amount * 0.1;
+                const creatorShare = amount * 0.9;
+                await addDoc(collection(firestore, "transactions"), {
+                  uid: authenticatedUser?.uid || null,
+                  email: userEmail,
+                  userName: name || authenticatedUser?.displayName || "Customer",
+                  amount: amount,
+                  currency: currency,
+                  itemId: isProMembership ? "PRO_BUNDLE" : (itemId || "software_item"),
+                  productId: isProMembership ? "PRO_BUNDLE" : (itemId || "software_item"),
+                  itemTitle: itemTitle || (isProMembership ? "Lifetime Pro Access" : "Software Access"),
+                  paymentId: paymentId,
+                  orderId: orderId || null,
+                  type: isProMembership ? "pro_membership" : "individual",
+                  vendorId: vendorId || "platform",
+                  payoutAccountId: creatorRzpAccount || "",
+                  platformCommission: isProMembership ? 0 : platformFee,
+                  creatorPayout: isProMembership ? 0 : creatorShare,
+                  gateway: "razorpay",
+                  status: "captured",
+                  timestamp: Timestamp.now(),
+                });
+              } catch (txErr) {
+                console.warn("Transaction log note:", txErr);
+              }
+
+              // Log audit entry
+              try {
+                await addDoc(collection(firestore, "auditLogs"), {
+                  type: "Payment",
+                  user: userEmail || "Anonymous",
+                  detail: `Paid ${currency} ${amount} for ${itemTitle || "Lifetime Pro Access"}.`,
+                  timestamp: Timestamp.now(),
+                });
+              } catch (auditErr) {}
+
               setSuccessData({
                 type: isProMembership ? "website_pro" : "software_download",
                 title: isProMembership ? "Website Lifetime Pro Access Unlocked" : (itemTitle || "Software Access Unlocked"),
