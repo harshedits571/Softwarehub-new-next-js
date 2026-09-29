@@ -132,7 +132,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   }, [itemId, isOpen]);
 
-  if (!isOpen) return null;
+  // Strict Personal Cloud product determination (ONLY triggers for Personal Cloud items)
+  const isPersonalCloud =
+    Boolean(itemId && String(itemId).toLowerCase().startsWith("personal-cloud")) ||
+    Boolean(itemId && String(itemId).toLowerCase().includes("personal_cloud")) ||
+    Boolean(itemTitle && String(itemTitle).toLowerCase().includes("personal cloud"));
+
+  const isProMembership = !isPersonalCloud && (!itemId || itemId === "PRO_BUNDLE" || String(itemTitle).toLowerCase().includes("pro membership"));
 
   const displayPrice = currency === "USD" ? `$${amount.toFixed(2)}` : `₹${amount}`;
 
@@ -150,80 +156,92 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    if (!password || password.length < 6) {
-      onAlert("Please create an App Password with at least 6 characters. You will need this to sign into the Windows PC application.", "Password Required", "error");
-      return;
-    }
+    // Only Personal Cloud requires PC App Password and Phone number
+    if (isPersonalCloud) {
+      if (!password || password.length < 6) {
+        onAlert("Please create an App Password with at least 6 characters. You will need this to sign into the Windows PC application.", "Password Required", "error");
+        return;
+      }
 
-    if (!phone.trim()) {
-      onAlert("Please enter your phone number.", "Phone Required", "error");
-      return;
+      if (!phone.trim()) {
+        onAlert("Please enter your phone number.", "Phone Required", "error");
+        return;
+      }
     }
 
     let authenticatedUser = currentUser;
     setAuthLoading(true);
 
-    // 1. Account Creation or Password Binding
+    // 1. Account Creation or Password Binding (For Personal Cloud or existing users)
     try {
       if (!authenticatedUser) {
-        // Create new account with email & password
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-          authenticatedUser = cred.user;
-          if (name.trim()) {
-            await updateProfile(authenticatedUser, { displayName: name.trim() });
-          }
-          await setDoc(doc(firestore, "users", authenticatedUser.uid), {
-            name: name.trim(),
-            email: cleanEmail,
-            phone: countryCode + phone.trim(),
-            appPassword: password,
-            status: "active",
-            role: "customer",
-            createdAt: Timestamp.now(),
-            joinedAt: new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
-          }, { merge: true });
-        } catch (signupErr: any) {
-          if (signupErr.code === "auth/email-already-in-use") {
-            try {
-              const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
-              authenticatedUser = cred.user;
-            } catch (signInErr: any) {
+        if (isPersonalCloud && password) {
+          // Create new account with email & password for Personal Cloud login
+          try {
+            const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+            authenticatedUser = cred.user;
+            if (name.trim()) {
+              await updateProfile(authenticatedUser, { displayName: name.trim() });
+            }
+            await setDoc(doc(firestore, "users", authenticatedUser.uid), {
+              name: name.trim(),
+              email: cleanEmail,
+              phone: countryCode + phone.trim(),
+              appPassword: password,
+              status: "active",
+              role: "customer",
+              createdAt: Timestamp.now(),
+              joinedAt: new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+            }, { merge: true });
+          } catch (signupErr: any) {
+            if (signupErr.code === "auth/email-already-in-use") {
+              try {
+                const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+                authenticatedUser = cred.user;
+              } catch (signInErr: any) {
+                setAuthLoading(false);
+                onAlert("An account with this email already exists. Please verify your password or sign in first.", "Account Exists", "error");
+                return;
+              }
+            } else {
               setAuthLoading(false);
-              onAlert("An account with this email already exists. Please verify your password or sign in first.", "Account Exists", "error");
+              onAlert(signupErr.message || "Failed to create account.", "Sign Up Error", "error");
               return;
             }
-          } else {
-            setAuthLoading(false);
-            onAlert(signupErr.message || "Failed to create account.", "Sign Up Error", "error");
-            return;
           }
         }
       } else {
-        // User is already logged in (e.g. via Google or session)
-        // Bind the password to their Firebase Auth account so they can use Email & Password in desktop app
-        try {
-          if (authenticatedUser.email) {
-            try {
-              await linkWithCredential(authenticatedUser, EmailAuthProvider.credential(authenticatedUser.email, password));
-            } catch (linkErr: any) {
-              if (linkErr.code === "auth/provider-already-linked" || linkErr.code === "auth/credential-already-in-use") {
-                await updatePassword(authenticatedUser, password);
+        // User is already logged in
+        if (isPersonalCloud && password) {
+          try {
+            if (authenticatedUser.email) {
+              try {
+                await linkWithCredential(authenticatedUser, EmailAuthProvider.credential(authenticatedUser.email, password));
+              } catch (linkErr: any) {
+                if (linkErr.code === "auth/provider-already-linked" || linkErr.code === "auth/credential-already-in-use") {
+                  await updatePassword(authenticatedUser, password);
+                }
               }
             }
+          } catch (pwErr) {
+            console.warn("Could not link Firebase auth password, stored in Firestore profile instead:", pwErr);
           }
-        } catch (pwErr) {
-          console.warn("Could not link Firebase auth password, stored in Firestore profile instead:", pwErr);
-        }
 
-        // Always save to Firestore user profile
-        await setDoc(doc(firestore, "users", authenticatedUser.uid), {
-          name: name.trim() || authenticatedUser.displayName || "Customer",
-          email: cleanEmail,
-          phone: countryCode + phone.trim(),
-          appPassword: password,
-          updatedAt: Timestamp.now(),
-        }, { merge: true });
+          await setDoc(doc(firestore, "users", authenticatedUser.uid), {
+            name: name.trim() || authenticatedUser.displayName || "Customer",
+            email: cleanEmail,
+            phone: countryCode + phone.trim(),
+            appPassword: password,
+            updatedAt: Timestamp.now(),
+          }, { merge: true });
+        } else {
+          // Standard Website Pro / Software purchase profile update
+          await setDoc(doc(firestore, "users", authenticatedUser.uid), {
+            name: name.trim() || authenticatedUser.displayName || "Customer",
+            email: cleanEmail,
+            updatedAt: Timestamp.now(),
+          }, { merge: true });
+        }
       }
     } catch (authErr: any) {
       setAuthLoading(false);
@@ -249,15 +267,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    const description = itemId ? `Access to: ${itemTitle}` : "Lifetime Pro Access Bundle";
-
-    // Strict Personal Cloud product determination (ONLY triggers for Personal Cloud items)
-    const isPersonalCloud =
-      Boolean(itemId && String(itemId).toLowerCase().startsWith("personal-cloud")) ||
-      Boolean(itemId && String(itemId).toLowerCase().includes("personal_cloud")) ||
-      Boolean(itemTitle && String(itemTitle).toLowerCase().includes("personal cloud"));
-
-    const isProMembership = !isPersonalCloud && (!itemId || itemId === "PRO_BUNDLE" || String(itemTitle).toLowerCase().includes("pro membership"));
+    const description = itemId ? `Access to: ${itemTitle}` : (isPersonalCloud ? "Personal Cloud Lifetime License" : "Lifetime Website Pro Access Bundle");
 
     const planType = isPersonalCloud
       ? String(itemId || itemTitle).toLowerCase().includes("family")
@@ -828,25 +838,47 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             
             <h3 className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-2">Order & Account Setup</h3>
             <h2 className="text-2xl md:text-3xl font-black text-white leading-tight mb-4">
-              {itemTitle || "Personal Cloud Pro"}
+              {itemTitle || (isPersonalCloud ? "Personal Cloud Pro" : "Pro Membership")}
             </h2>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              Fill in your details and create your <b>Personal Cloud App Password</b>. You will use your email and this password to sign into the Windows PC software!
+              {isPersonalCloud
+                ? "Fill in your details and create your Personal Cloud App Password. You will use your email and this password to sign into the Windows PC software!"
+                : "Unlock unlimited instant lifetime access to download all software, plugins, templates, and video editing packs on SoftwareHubs!"
+              }
             </p>
 
             <div className="space-y-2 text-xs text-gray-400">
-              <div className="flex items-center gap-2 text-emerald-400">
-                <i className="fa-solid fa-check"></i>
-                <span>Lifetime license with zero monthly fees</span>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-400">
-                <i className="fa-solid fa-check"></i>
-                <span>Automatic 1-click cloud gateway on softwarehubs.in</span>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-400">
-                <i className="fa-solid fa-check"></i>
-                <span>Instant PC login with Email & Password</span>
-              </div>
+              {isPersonalCloud ? (
+                <>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Lifetime license with zero monthly fees</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Automatic 1-click cloud gateway on softwarehubs.in</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Instant PC login with Email & Password</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Unlimited instant software & asset downloads</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Commercial & personal usage licenses included</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <i className="fa-solid fa-check"></i>
+                    <span>Lifetime free updates & zero monthly fees</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -875,10 +907,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
           <div className="mb-6">
             <h3 className="text-xl font-bold text-white mb-1">
-              Personal Cloud Profile Setup
+              {isPersonalCloud ? "Personal Cloud Profile Setup" : "Account & Checkout Details"}
             </h3>
             <p className="text-xs text-gray-400">
-              {currentUser ? "Verify your info & create your PC desktop password below." : "Enter your details to create your account & desktop login credentials."}
+              {isPersonalCloud
+                ? (currentUser ? "Verify your info & create your PC desktop password below." : "Enter your details to create your account & desktop login credentials.")
+                : "Confirm your details below to unlock instant lifetime access."}
             </p>
           </div>
 
@@ -917,66 +951,73 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 placeholder="yourname@gmail.com"
               />
               <span className="text-[11px] text-gray-500 mt-1 block">
-                This email will be your login ID in the Windows app.
+                {isPersonalCloud 
+                  ? "This email will be your login ID in the Windows app."
+                  : "Your purchase access & receipt will be linked to this account email."
+                }
               </span>
             </div>
 
-            {/* MANDATORY FOR ALL: Set Personal Cloud App Password */}
-            <div className="bg-gradient-to-r from-indigo-950/40 to-purple-950/40 border border-indigo-500/30 rounded-2xl p-4">
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
-                  <span>🔑</span>
-                  <span>Create App Password (For PC Login) *</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-[11px] text-indigo-400 hover:text-indigo-200 font-medium"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full bg-[#0a0d14] border border-indigo-500/40 focus:border-indigo-400 rounded-xl px-4 py-3 text-white placeholder-gray-500 outline-none text-sm transition-all"
-                placeholder="Set a password for your PC app (min. 6 characters)"
-              />
-              <span className="text-[11px] text-indigo-200/70 mt-1.5 block leading-relaxed">
-                👉 <b>Important:</b> You will type this password into the <b>Personal Cloud Pro</b> app on your Windows PC to unlock your server!
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-400 mb-1.5">Phone Number (For WhatsApp Updates & Invoices) *</label>
-              <div className="flex bg-[#0a0d14] border border-white/10 focus-within:border-indigo-500 rounded-xl transition-all overflow-hidden">
-                <div className="flex items-center bg-white/5 border-r border-white/5 relative">
-                  <select
-                    value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
-                    className="bg-transparent text-gray-400 text-sm font-medium outline-none px-3 py-3 appearance-none cursor-pointer hover:text-white transition-colors z-10 relative"
-                  >
-                    {COUNTRY_CODES.map((c) => (
-                      <option key={c.name + c.code} value={c.code} className="bg-[#0a0d14] text-white">
-                        {c.code} {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <i className="fa-solid fa-chevron-down text-[10px] text-gray-500 absolute right-2 pointer-events-none z-0"></i>
+            {/* MANDATORY ONLY FOR PERSONAL CLOUD: Set PC App Password & Phone */}
+            {isPersonalCloud && (
+              <>
+                <div className="bg-gradient-to-r from-indigo-950/40 to-purple-950/40 border border-indigo-500/30 rounded-2xl p-4">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
+                      <span>🔑</span>
+                      <span>Create App Password (For PC Login) *</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[11px] text-indigo-400 hover:text-indigo-200 font-medium"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full bg-[#0a0d14] border border-indigo-500/40 focus:border-indigo-400 rounded-xl px-4 py-3 text-white placeholder-gray-500 outline-none text-sm transition-all"
+                    placeholder="Set a password for your PC app (min. 6 characters)"
+                  />
+                  <span className="text-[11px] text-indigo-200/70 mt-1.5 block leading-relaxed">
+                    👉 <b>Important:</b> You will type this password into the <b>Personal Cloud Pro</b> app on your Windows PC to unlock your server!
+                  </span>
                 </div>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-600 outline-none text-sm"
-                  placeholder="98765 43210"
-                />
-              </div>
-            </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1.5">Phone Number (For WhatsApp Updates & Invoices) *</label>
+                  <div className="flex bg-[#0a0d14] border border-white/10 focus-within:border-indigo-500 rounded-xl transition-all overflow-hidden">
+                    <div className="flex items-center bg-white/5 border-r border-white/5 relative">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="bg-transparent text-gray-400 text-sm font-medium outline-none px-3 py-3 appearance-none cursor-pointer hover:text-white transition-colors z-10 relative"
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c.name + c.code} value={c.code} className="bg-[#0a0d14] text-white">
+                            {c.code} {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <i className="fa-solid fa-chevron-down text-[10px] text-gray-500 absolute right-2 pointer-events-none z-0"></i>
+                    </div>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      required
+                      className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-600 outline-none text-sm"
+                      placeholder="98765 43210"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
