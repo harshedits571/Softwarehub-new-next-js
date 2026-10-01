@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_live_SeElRgESDAvD5D";
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || "kAkQYdYDxrZZGifmZWfqdLeh";
 
     if (!keyId || !keySecret) {
       return NextResponse.json(

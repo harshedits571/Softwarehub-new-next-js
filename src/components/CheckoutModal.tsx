@@ -172,7 +172,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     let authenticatedUser = currentUser;
     setAuthLoading(true);
 
-    // 1. Account Creation or Password Binding (For Personal Cloud or existing users)
+    // 1. Account Creation or Password Binding
     try {
       if (!authenticatedUser) {
         if (isPersonalCloud && password) {
@@ -209,6 +209,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               return;
             }
           }
+        } else {
+          // Unlogged-in user attempting Website Pro or software purchase
+          setAuthLoading(false);
+          onAlert("Please log in or create an account first so your Lifetime Pro access is permanently tied to your profile.", "Sign In Required", "info");
+          window.location.href = "/auth";
+          return;
         }
       } else {
         // User is already logged in
@@ -580,9 +586,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 downloadUrl: "/",
               });
               onSuccess(paymentId);
-            } catch (err) {
+            } catch (err: any) {
               console.error("Payment verification or completion error:", err);
-              onAlert("Payment was received, but there was an issue completing the verification. Please check your account or contact support.", "Verification Error", "error");
+              const errMsg = err?.message || "Payment was received, but there was an issue completing the verification.";
+              onAlert(errMsg, "Verification Error", "error");
             }
           }
         },

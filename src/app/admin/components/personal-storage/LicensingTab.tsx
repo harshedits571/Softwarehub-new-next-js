@@ -8,6 +8,10 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
+  query,
+  where,
+  getDocs,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -55,11 +59,17 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
 
   // Modals
   const [showGenModal, setShowGenModal] = useState(false);
+  const [showBulkExtendModal, setShowBulkExtendModal] = useState(false);
   const [viewingDevices, setViewingDevices] = useState<LicenseRecord | null>(null);
   const [editingLicense, setEditingLicense] = useState<LicenseRecord | null>(null);
   const [renewingLicense, setRenewingLicense] = useState<LicenseRecord | null>(null);
   const [generating, setGenerating] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [bulkExtending, setBulkExtending] = useState(false);
+
+  // Bulk Extend Form
+  const [bulkDays, setBulkDays] = useState(30);
+  const [bulkScope, setBulkScope] = useState<"all_trials" | "active_only" | "expired_only">("all_trials");
 
   // Generator form
   const [genName, setGenName] = useState("");
@@ -477,12 +487,65 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
     }
   };
 
-  // Delete license
+  // Delete license completely from database and user profile
   const handleDeleteLicense = async (license: LicenseRecord) => {
-    if (!confirm(`Permanently delete license ${license.key}? Customer will lose access.`)) return;
+    if (!confirm(`Permanently delete license ${license.key} for ${license.customerEmail || "customer"}?\n\nThis will completely revoke their access, remove it from their dashboard, and reset their trial state across the entire database.`)) return;
     try {
-      await deleteDoc(doc(db, "licenses", license.id));
+      // 1. Call server-side cleanup endpoint
+      try {
+        await fetch("/api/license/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            licenseId: license.id,
+            licenseKey: license.key,
+            customerEmail: license.customerEmail,
+          }),
+        });
+      } catch (e) {
+        console.warn("API delete route error, falling back to direct client deletion:", e);
+      }
+
+      // 2. Direct client-side Firestore fallback & instant cleanup
+      if (license.id) {
+        await deleteDoc(doc(db, "licenses", license.id)).catch(() => {});
+      }
+
+      const cleanKey = (license.key || "").trim().toUpperCase();
+      const cleanEmail = (license.customerEmail || "").trim().toLowerCase();
+
+      if (cleanKey) {
+        const qKey = query(collection(db, "licenses"), where("key", "==", cleanKey));
+        const snap = await getDocs(qKey);
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref).catch(() => {});
+        }
+      }
+
+      if (cleanEmail) {
+        // Delete all license docs for this email
+        const qEmail = query(collection(db, "licenses"), where("customerEmail", "==", cleanEmail));
+        const snap = await getDocs(qEmail);
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref).catch(() => {});
+        }
+
+        // Wipe personalCloud & trialClaimed from users collection
+        const qUsers = query(collection(db, "users"), where("email", "==", cleanEmail));
+        const snapUsers = await getDocs(qUsers);
+        for (const u of snapUsers.docs) {
+          await updateDoc(u.ref, {
+            personalCloud: deleteField(),
+            trialClaimed: deleteField(),
+            trialStartDate: deleteField(),
+            trialEndDate: deleteField(),
+            licenseKey: deleteField(),
+          }).catch(() => {});
+        }
+      }
+
       if (onRefresh) onRefresh();
+      alert(`License ${license.key} has been completely deleted and user record was cleared.`);
     } catch (err: any) {
       alert("Error deleting license: " + err.message);
     }
@@ -525,6 +588,94 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Bulk Extend All Trials Handler
+  const trialLicenses = licenses.filter((l) => l.isTrial || l.plan?.toLowerCase() === "trial");
+  const activeTrialCount = trialLicenses.filter((l) => {
+    const exp = getExpiryDetails(l);
+    return !exp.isExpired;
+  }).length;
+  const expiredTrialCount = trialLicenses.length - activeTrialCount;
+
+  const handleBulkExtendTrials = async () => {
+    if (trialLicenses.length === 0) {
+      return alert("No trial licenses found in the database to extend.");
+    }
+
+    const scopeText = bulkScope === "active_only" ? "Active Trials only" : bulkScope === "expired_only" ? "Expired Trials only" : "ALL Free Trials (Active & Expired)";
+    if (!confirm(`Are you sure you want to extend ${scopeText} by +${bulkDays} days across the entire database?`)) {
+      return;
+    }
+
+    setBulkExtending(true);
+    try {
+      const now = Date.now();
+      const msToAdd = bulkDays * 24 * 60 * 60 * 1000;
+      let count = 0;
+
+      for (const lic of trialLicenses) {
+        let currentEnd = 0;
+        if (lic.trialEndDate) {
+          if (lic.trialEndDate.toDate) currentEnd = lic.trialEndDate.toDate().getTime();
+          else if (lic.trialEndDate.seconds) currentEnd = lic.trialEndDate.seconds * 1000;
+          else currentEnd = new Date(lic.trialEndDate).getTime();
+        }
+
+        const isCurrentlyExpired = Boolean(!currentEnd || isNaN(currentEnd) || currentEnd < now);
+
+        if (bulkScope === "active_only" && isCurrentlyExpired) continue;
+        if (bulkScope === "expired_only" && !isCurrentlyExpired) continue;
+
+        const baseTime = (!isCurrentlyExpired && currentEnd > now) ? currentEnd : now;
+        const newTrialEnd = new Date(baseTime + msToAdd).toISOString();
+
+        // 1. Update license document in licenses collection
+        await updateDoc(doc(db, "licenses", lic.id), {
+          trialEndDate: newTrialEnd,
+          isTrial: true,
+          plan: "trial",
+          status: "active",
+          updatedAt: new Date().toISOString(),
+        }).catch((e) => console.warn("License update note:", lic.id, e));
+
+        // 2. Update user profile in users collection
+        const email = (lic.customerEmail || "").trim().toLowerCase();
+        if (email) {
+          try {
+            const qUsers = query(collection(db, "users"), where("email", "==", email));
+            const snapUsers = await getDocs(qUsers);
+            for (const u of snapUsers.docs) {
+              const uData = u.data();
+              await updateDoc(u.ref, {
+                trialClaimed: true,
+                trialEndDate: newTrialEnd,
+                personalCloud: {
+                  ...(uData.personalCloud || {}),
+                  trialEndDate: newTrialEnd,
+                  isTrial: true,
+                  plan: "trial",
+                  status: "active",
+                  activated: true,
+                },
+              });
+            }
+          } catch (userErr) {
+            console.warn("User profile update note:", email, userErr);
+          }
+        }
+
+        count++;
+      }
+
+      alert(`✅ Success! Extended ${count} trial user(s) by +${bulkDays} days.`);
+      setShowBulkExtendModal(false);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert("Error extending trials: " + err.message);
+    } finally {
+      setBulkExtending(false);
+    }
   };
 
   return (
@@ -621,17 +772,25 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={exportCSV}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs border border-white/10 transition font-medium"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs border border-white/10 transition font-medium cursor-pointer"
           >
             <i className="fa-solid fa-file-csv text-cyan-400"></i>
             Export CSV
           </button>
           <button
+            onClick={() => setShowBulkExtendModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold shadow-lg shadow-amber-500/10 transition active:scale-95 whitespace-nowrap cursor-pointer"
+            title="Bulk extend trial days for all users at once"
+          >
+            <i className="fa-solid fa-clock-rotate-left text-amber-400"></i>
+            Bulk Extend All Trials
+          </button>
+          <button
             onClick={() => setShowGenModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium text-xs shadow-lg shadow-cyan-500/20 hover:brightness-110 transition active:scale-95 whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium text-xs shadow-lg shadow-cyan-500/20 hover:brightness-110 transition active:scale-95 whitespace-nowrap cursor-pointer"
           >
             <i className="fa-solid fa-key text-[11px]"></i>
             Generate Key / Trial
@@ -1358,6 +1517,152 @@ export default function LicensingTab({ licenses, onRefresh }: LicensingTabProps)
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          BULK EXTEND ALL TRIALS MODAL
+         ======================================================== */}
+      {showBulkExtendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#121622] border border-amber-500/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg">
+                  <i className="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Bulk Extend Free Trials</h3>
+                  <p className="text-xs text-slate-400">Add free trial days to all users across the entire database</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBulkExtendModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Trial User Counts Summary */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-[#0a0d14] p-3 rounded-xl border border-white/5 text-center">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Trials</span>
+                <span className="text-xl font-black text-white">{trialLicenses.length}</span>
+              </div>
+              <div className="bg-[#0a0d14] p-3 rounded-xl border border-emerald-500/20 text-center">
+                <span className="text-[10px] text-emerald-400 uppercase font-bold block">Active Trials</span>
+                <span className="text-xl font-black text-emerald-300">{activeTrialCount}</span>
+              </div>
+              <div className="bg-[#0a0d14] p-3 rounded-xl border border-rose-500/20 text-center">
+                <span className="text-[10px] text-rose-400 uppercase font-bold block">Expired Trials</span>
+                <span className="text-xl font-black text-rose-300">{expiredTrialCount}</span>
+              </div>
+            </div>
+
+            {/* Quick Presets */}
+            <div>
+              <label className="block text-slate-300 font-semibold text-xs mb-2">Select Days to Add</label>
+              <div className="grid grid-cols-5 gap-2 mb-3">
+                {[7, 14, 30, 60, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setBulkDays(d)}
+                    className={`py-2 rounded-lg text-xs font-bold border transition ${
+                      bulkDays === d
+                        ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10"
+                        : "bg-[#0a0d14] border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    +{d} Days
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={bulkDays}
+                  onChange={(e) => setBulkDays(Math.max(1, Number(e.target.value)))}
+                  className="w-full bg-[#0a0d14] text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-amber-500 text-xs font-mono font-bold"
+                  placeholder="Custom number of days..."
+                />
+                <span className="text-xs text-slate-400 shrink-0 font-medium">days to add</span>
+              </div>
+            </div>
+
+            {/* Target Scope Selection */}
+            <div>
+              <label className="block text-slate-300 font-semibold text-xs mb-2">Target Scope</label>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${bulkScope === "all_trials" ? "bg-amber-500/10 border-amber-500/40 text-white" : "bg-[#0a0d14] border-white/5 text-slate-400"}`}>
+                  <input
+                    type="radio"
+                    name="bulkScope"
+                    checked={bulkScope === "all_trials"}
+                    onChange={() => setBulkScope("all_trials")}
+                    className="mt-0.5 accent-amber-500"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">⚡ All Free Trials ({trialLicenses.length} users)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Adds +{bulkDays} days to active users and reactivates expired users for +{bulkDays} fresh days from now.</div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${bulkScope === "active_only" ? "bg-emerald-500/10 border-emerald-500/40 text-white" : "bg-[#0a0d14] border-white/5 text-slate-400"}`}>
+                  <input
+                    type="radio"
+                    name="bulkScope"
+                    checked={bulkScope === "active_only"}
+                    onChange={() => setBulkScope("active_only")}
+                    className="mt-0.5 accent-emerald-500"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-emerald-300">⏳ Only Active Trials ({activeTrialCount} users)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Adds +{bulkDays} days on top of their existing remaining countdown.</div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${bulkScope === "expired_only" ? "bg-rose-500/10 border-rose-500/40 text-white" : "bg-[#0a0d14] border-white/5 text-slate-400"}`}>
+                  <input
+                    type="radio"
+                    name="bulkScope"
+                    checked={bulkScope === "expired_only"}
+                    onChange={() => setBulkScope("expired_only")}
+                    className="mt-0.5 accent-rose-500"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-rose-300">🚨 Only Expired Trials ({expiredTrialCount} users)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Re-activates all expired trial accounts with +{bulkDays} fresh days.</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBulkExtendModal(false)}
+                className="px-4 py-2 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={bulkExtending || trialLicenses.length === 0}
+                onClick={handleBulkExtendTrials}
+                className="px-5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-500/20 transition active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+              >
+                <i className={`fa-solid ${bulkExtending ? "fa-spinner fa-spin" : "fa-bolt"}`}></i>
+                <span>{bulkExtending ? "Extending Database Trials..." : `Extend +${bulkDays} Days For All`}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

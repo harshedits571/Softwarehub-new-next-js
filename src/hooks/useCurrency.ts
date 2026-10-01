@@ -55,7 +55,7 @@ export const useCurrency = () => {
     currency: "USD",
     proPrice: 10,
     proPriceUSD: 0.99,
-    rzpKey: process.env.NEXT_PUBLIC_RAZORPAY_KEY || "rzp_live_SeElRgESDAvD5D",
+    rzpKey: process.env.NEXT_PUBLIC_RAZORPAY_KEY || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_live_SeElRgESDAvD5D",
     activePrice: 0.99,
     symbol: "$",
     displayPrice: "0.99",
@@ -78,7 +78,7 @@ export const useCurrency = () => {
       const proPrice = parseFloat(data?.proPrice) || 10;
       const proPriceUSD = parseFloat(data?.proPriceUSD) || 0.99;
       const activePrice = currency === "INR" ? proPrice : proPriceUSD;
-      const rzpKey = data?.rzpKey || process.env.NEXT_PUBLIC_RAZORPAY_KEY || "rzp_live_SeElRgESDAvD5D";
+      const rzpKey = data?.rzpKey || process.env.NEXT_PUBLIC_RAZORPAY_KEY || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_live_SeElRgESDAvD5D";
 
       setPricing({
         currency,

@@ -42,6 +42,7 @@ export default function CustomerDashboard() {
   const [purchasedProducts, setPurchasedProducts] = useState<PurchasedItem[]>([]);
   const [creatorMap, setCreatorMap] = useState<Record<string, string>>({});
   const [personalCloudLicense, setPersonalCloudLicense] = useState<any>(null);
+  const [cloudPricingConfig, setCloudPricingConfig] = useState<any>(null);
   const [softwareUpdate, setSoftwareUpdate] = useState<any>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -164,13 +165,30 @@ export default function CustomerDashboard() {
       })
       .catch((err) => console.warn("Could not fetch software updates:", err));
 
+    // 6. Fetch live Personal Cloud pricing config
+    const unsubCloudPricing = onSnapshot(
+      doc(firestore, "config", "personal_cloud_pricing"),
+      (snap) => {
+        if (snap.exists() && snap.data()?.plans) {
+          setCloudPricingConfig(snap.data().plans);
+        }
+      },
+      (err) => console.warn("Could not fetch cloud pricing config:", err)
+    );
+
     return () => {
       unsubCust();
       unsubOrders();
       unsubProducts();
       unsubLic();
+      unsubCloudPricing();
     };
   }, [currentUser, userProfile]);
+
+  const rawProPlan = cloudPricingConfig?.pro;
+  const dynamicProPrice = pricing.currency === "INR"
+    ? (Number(rawProPlan?.price) || 999)
+    : (Number(rawProPlan?.usdPrice) || 19.99);
 
   const handleSaveProfile = async () => {
     if (!currentUser?.email) return;
@@ -497,19 +515,22 @@ export default function CustomerDashboard() {
                       onClick={() => {
                         setCheckoutItem({
                           id: "personal-cloud-pro",
-                          title: "Personal Cloud Pro - Lifetime License Upgrade",
-                          amount: pricing.currency === "INR" ? 999 : 19.99,
+                          title: `Personal Cloud - ${rawProPlan?.name || "Pro Security Edition"} Upgrade`,
+                          amount: dynamicProPrice,
                         });
                         setIsCheckoutOpen(true);
                       }}
-                      className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-amber-300 font-bold text-xs flex flex-col justify-between gap-3 transition text-left"
+                      className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-amber-300 font-bold text-xs flex flex-col justify-between gap-3 transition text-left cursor-pointer"
                     >
                       <div className="flex items-center justify-between">
                         <i className="fa-solid fa-crown text-lg text-amber-400"></i>
                         <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded font-bold">UPGRADE</span>
                       </div>
                       <div>
-                        <div className="font-extrabold text-sm text-white">Upgrade to Lifetime Pro</div>
+                        <div className="font-extrabold text-sm text-white flex items-center justify-between">
+                          <span>Upgrade to Lifetime Pro</span>
+                          <span className="text-amber-400 font-mono text-xs">{pricing.currency === "INR" ? `₹${dynamicProPrice}` : `$${dynamicProPrice}`}</span>
+                        </div>
                         <span className="text-[10px] text-amber-200 font-normal">
                           Unlock 3 PCs, 4K streaming & screen mirror
                         </span>

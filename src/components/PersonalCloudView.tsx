@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { doc, onSnapshot } from "firebase/firestore";
-import { firestore } from "../utils/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { firestore, auth } from "../utils/firebase";
 import ScrollReveal from "./ScrollReveal";
 
 interface PersonalCloudViewProps {
@@ -42,6 +43,28 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
   const [activeDrive, setActiveDrive] = useState("D:");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [pricingConfig, setPricingConfig] = useState<Record<string, any> | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Real-time auth & user profile sync
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        const unsubDoc = onSnapshot(doc(firestore, "users", user.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data());
+          } else {
+            setUserProfile(null);
+          }
+        });
+        return () => unsubDoc();
+      } else {
+        setUserProfile(null);
+      }
+    });
+    return () => unsubAuth();
+  }, []);
 
   // Live real-time sync with Admin Pricing Management
   useEffect(() => {
@@ -58,6 +81,10 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
     );
     return () => unsub();
   }, []);
+
+  const pCloud = userProfile?.personalCloud;
+  const isTrialClaimed = Boolean(userProfile?.trialClaimed || pCloud?.trialClaimed || pCloud?.isTrial || pCloud?.plan === "trial");
+  const hasLifetimePro = Boolean(pCloud?.plan && pCloud?.plan !== "trial" && pCloud?.activated);
 
   const rawStarter = pricingConfig?.starter || {
     id: "starter",
@@ -101,6 +128,9 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
     ],
   };
 
+  const proCurrentPrice = currency === "INR" ? (rawPro.price ?? 999) : (rawPro.usdPrice ?? 19.99);
+  const proOriginalPrice = currency === "INR" ? (rawPro.originalPrice ?? 2999) : (rawPro.usdPrice ? rawPro.usdPrice * 3 : 59.99);
+
   const rawFamily = pricingConfig?.family || {
     id: "family",
     name: "Family & Power Bundle",
@@ -130,7 +160,10 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       popular: false,
       isTrial: true,
       enabled: true,
-      description: "Full-featured access on 1 PC. Zero commitment, no payment details required.",
+      badge: isTrialClaimed ? "TRIAL ACTIVE" : undefined,
+      description: isTrialClaimed
+        ? "Your 30-day trial is active. Download the Windows setup installer or upgrade to Lifetime."
+        : "Full-featured access on 1 PC. Zero commitment, no payment details required.",
       features: [
         "Full 30-Day Unlimited Access",
         "1 PC Server Node",
@@ -139,7 +172,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
         "End-to-End Encrypted Tunnel",
         "Upgrade to Lifetime anytime"
       ],
-      cta: "Start 30-Day Free Trial",
+      cta: isTrialClaimed ? "Download Setup (.exe) 📥" : "Start 30-Day Free Trial",
     },
     {
       id: "starter",
@@ -163,7 +196,9 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       features: rawPro.features || [],
       popular: rawPro.popular !== undefined ? Boolean(rawPro.popular) : true,
       enabled: rawPro.enabled !== false,
-      cta: currency === "INR" ? `Get Pro License (₹${rawPro.price ?? 999})` : `Get Pro License ($${rawPro.usdPrice ?? 19.99})`,
+      cta: isTrialClaimed
+        ? (currency === "INR" ? `👑 Upgrade to Pro (₹${rawPro.price ?? 999})` : `👑 Upgrade to Pro ($${rawPro.usdPrice ?? 19.99})`)
+        : (currency === "INR" ? `Get Pro License (₹${rawPro.price ?? 999})` : `Get Pro License ($${rawPro.usdPrice ?? 19.99})`),
     },
     {
       id: "family",
@@ -258,7 +293,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
 
   // Comparison Rows exactly from website/src/components/Comparison.js
   const comparisonRows = [
-    { feature: "Pricing Model", us: currency === "INR" ? "₹999 One-Time (Lifetime)" : "$19.99 One-Time", gdrive: "₹1,500 – ₹7,500 / year (Every year)", teamviewer: "₹24,000+ / year" },
+    { feature: "Pricing Model", us: currency === "INR" ? `₹${rawPro.price ?? 999} One-Time (Lifetime)` : `$${rawPro.usdPrice ?? 19.99} One-Time`, gdrive: "₹1,500 – ₹7,500 / year (Every year)", teamviewer: "₹24,000+ / year" },
     { feature: "Storage Capacity", us: "Unlimited (Full PC Hard Drives)", gdrive: "100 GB – 2 TB Cap", teamviewer: "0 GB (No file cloud)" },
     { feature: "Data Privacy", us: "100% Zero-Knowledge on Your PC", gdrive: "Scanned for ads & AI models", teamviewer: "Proprietary server relays" },
     { feature: "4K Movie Streaming", us: "Instant Transcoder & Subtitles", gdrive: "Must download first", teamviewer: "Laggy screen stream" },
@@ -331,7 +366,7 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
           <div className="inline-flex mb-6">
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow-lg shadow-blue-500/10">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-              STANDALONE COMMERCIAL PRO EDITION
+              PERSONAL CLOUD PRO EDITION
             </span>
           </div>
 
@@ -350,21 +385,40 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
 
           {/* Dual CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
-            <button
-              onClick={() => onOpenTrial && onOpenTrial()}
-              className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_35px_rgba(6,182,212,0.45)] hover:shadow-[0_0_45px_rgba(6,182,212,0.65)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-cyan-400/30"
-            >
-              <i className="fa-solid fa-bolt text-yellow-300"></i>
-              <span>Start 30-Day Free Trial (₹0)</span>
-              <i className="fa-solid fa-arrow-right text-xs"></i>
-            </button>
+            {isTrialClaimed ? (
+              <button
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = "/downloads/PersonalCloud-Pro-Setup.exe";
+                  a.download = "PersonalCloud-Pro-Setup.exe";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  onToast("Starting direct download for PersonalCloud-Pro-Setup.exe...", "success");
+                }}
+                className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_35px_rgba(16,185,129,0.4)] hover:shadow-[0_0_45px_rgba(16,185,129,0.6)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-emerald-400/30"
+              >
+                <i className="fa-solid fa-download text-yellow-300"></i>
+                <span>Download Setup (.exe) 📥</span>
+                <span className="text-[10px] bg-black/30 px-2 py-0.5 rounded font-bold">Trial Active</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenTrial && onOpenTrial()}
+                className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_35px_rgba(6,182,212,0.45)] hover:shadow-[0_0_45px_rgba(6,182,212,0.65)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-cyan-400/30"
+              >
+                <i className="fa-solid fa-bolt text-yellow-300"></i>
+                <span>Start 30-Day Free Trial (₹0)</span>
+                <i className="fa-solid fa-arrow-right text-xs"></i>
+              </button>
+            )}
 
             <button
-              onClick={() => onBuyPro({ id: "pro", title: "Personal Cloud Pro Security Edition - Lifetime License", amount: currency === "INR" ? 999 : 19.99 })}
+              onClick={() => onBuyPro({ id: "personal-cloud-pro", title: `Personal Cloud - ${rawPro.name || "Pro Security Edition"}`, amount: proCurrentPrice })}
               className="w-full sm:w-auto bg-[#141422] hover:bg-[#1c1c30] text-white font-bold px-7 py-4 rounded-xl transition-all border border-white/10 hover:border-white/20 active:scale-95 flex items-center justify-center gap-2.5 text-sm md:text-base shadow-xl"
             >
               <i className="fa-solid fa-crown text-yellow-400"></i>
-              <span>Get Lifetime Access — {currency === "INR" ? "₹999" : "$19.99"}</span>
+              <span>{isTrialClaimed ? `👑 Upgrade to Pro — ${currency === "INR" ? `₹${proCurrentPrice}` : `$${proCurrentPrice}`}` : `Get Lifetime Access — ${currency === "INR" ? `₹${proCurrentPrice}` : `$${proCurrentPrice}`}`}</span>
             </button>
 
             <a
@@ -482,6 +536,154 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
         </div>
       </section>
 
+      {/* ========================================================
+          1.5 HOW IT WORKS IN 3 SIMPLE STEPS (Beginner Friendly)
+         ======================================================== */}
+      <ScrollReveal className="container mx-auto px-4 sm:px-6 max-w-6xl text-center">
+        <div className="bg-gradient-to-br from-[#0c101c] via-[#0e1424] to-[#080b14] border border-blue-500/20 rounded-[3rem] p-8 sm:p-12 relative overflow-hidden shadow-2xl">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 blur-[100px] pointer-events-none rounded-full" />
+
+          <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest block mb-2">SIMPLE 60-SECOND SETUP</span>
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">
+            How It Works in <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">3 Easy Steps</span>
+          </h2>
+          <p className="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto mb-12">
+            No technical knowledge or complicated network settings required. Get your private cloud running in under a minute.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left relative z-10">
+            {/* Step 1 */}
+            <div className="bg-[#07090e]/80 border border-white/10 rounded-2xl p-6 relative flex flex-col justify-between group hover:border-cyan-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-black text-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                1
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white mb-2">Install on Windows PC</h3>
+                <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                  Run the lightweight setup on your Windows PC. It turns your existing hard drives into your personal server automatically.
+                </p>
+              </div>
+              <div className="text-[11px] font-mono text-cyan-300 bg-cyan-950/40 border border-cyan-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <i className="fa-solid fa-circle-check text-emerald-400"></i>
+                <span>One-Click Installer</span>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="bg-[#07090e]/80 border border-white/10 rounded-2xl p-6 relative flex flex-col justify-between group hover:border-blue-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 font-black text-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                2
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white mb-2">Connect From Any Phone</h3>
+                <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                  Open your private encrypted link in Safari, Chrome, or any browser. Enter your Master PIN to unlock full access.
+                </p>
+              </div>
+              <div className="text-[11px] font-mono text-blue-300 bg-blue-950/40 border border-blue-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <i className="fa-solid fa-lock text-emerald-400"></i>
+                <span>No App Download Needed</span>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="bg-[#07090e]/80 border border-white/10 rounded-2xl p-6 relative flex flex-col justify-between group hover:border-purple-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400 font-black text-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                3
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white mb-2">Stream & Manage Anywhere</h3>
+                <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                  Stream 4K movies, download work documents, upload photos, or control your desktop from anywhere in the world on 4G/5G/Wi-Fi.
+                </p>
+              </div>
+              <div className="text-[11px] font-mono text-purple-300 bg-purple-950/40 border border-purple-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <i className="fa-solid fa-globe text-cyan-400"></i>
+                <span>Global Remote Access</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      {/* ========================================================
+          1.8 REAL-WORLD USE CASES (Who is this for?)
+         ======================================================== */}
+      <ScrollReveal className="container mx-auto px-4 sm:px-6 max-w-6xl text-center">
+        <span className="text-xs font-bold text-brand-400 uppercase tracking-widest block mb-2">REAL-WORLD APPLICATIONS</span>
+        <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">
+          How People Use It in <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Daily Life</span>
+        </h2>
+        <p className="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto mb-12">
+          From streaming entertainment to business work, see how Personal Cloud Pro simplifies your digital workflow.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+          {/* Case 1 */}
+          <div className="bg-[#0b0e18] border border-white/5 hover:border-blue-500/30 rounded-3xl p-6 transition-all shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xl mb-4">
+                🎬
+              </div>
+              <h3 className="text-base font-bold text-white mb-2">Movie & Media Streaming</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                Keep all your movies, series, and music on your PC at home. Stream them on your phone or tablet in high definition without occupying phone storage.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider bg-blue-500/10 px-2.5 py-1 rounded-md inline-block self-start">
+              For Movie Lovers
+            </span>
+          </div>
+
+          {/* Case 2 */}
+          <div className="bg-[#0b0e18] border border-white/5 hover:border-purple-500/30 rounded-3xl p-6 transition-all shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xl mb-4">
+                📸
+              </div>
+              <h3 className="text-base font-bold text-white mb-2">Creators & Photographers</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                Instantly transfer massive RAW photo folders and 4K footage from your phone directly to your computer without compression or cloud caps.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider bg-purple-500/10 px-2.5 py-1 rounded-md inline-block self-start">
+              For Video Editors
+            </span>
+          </div>
+
+          {/* Case 3 */}
+          <div className="bg-[#0b0e18] border border-white/5 hover:border-emerald-500/30 rounded-3xl p-6 transition-all shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl mb-4">
+                💼
+              </div>
+              <h3 className="text-base font-bold text-white mb-2">Office & Remote Work</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                Forgot an important presentation, bill, or code file on your home desktop? Grab it from your phone in 5 seconds while at the office or travelling.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2.5 py-1 rounded-md inline-block self-start">
+              For Professionals
+            </span>
+          </div>
+
+          {/* Case 4 */}
+          <div className="bg-[#0b0e18] border border-white/5 hover:border-yellow-500/30 rounded-3xl p-6 transition-all shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="w-12 h-12 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 text-xl mb-4">
+                🎮
+              </div>
+              <h3 className="text-base font-bold text-white mb-2">Gamers & Power Users</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
+                Adjust Discord and game volumes from your phone without alt-tabbing. Mirror your PC screen to check downloads or shut down your PC from bed.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider bg-yellow-500/10 px-2.5 py-1 rounded-md inline-block self-start">
+              For Gamers
+            </span>
+          </div>
+        </div>
+      </ScrollReveal>
 
       {/* ========================================================
           2. FEATURE GRID (Exactly from FeatureGrid.js)
@@ -550,8 +752,8 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${activeTab === tab.id
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-105"
-                    : "bg-[#141422] text-gray-400 hover:text-white hover:bg-white/10"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-105"
+                  : "bg-[#141422] text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
               >
                 {tab.label}
@@ -758,23 +960,45 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
 
 
       {/* ========================================================
-          4. SECURITY DEEP DIVE (Exactly from SecurityDeepDive.js)
+          4. SECURITY DEEP DIVE & DATA PRIVACY GUARANTEE
          ======================================================== */}
       <ScrollReveal className="container mx-auto px-4 sm:px-6 max-w-6xl">
+        {/* Security Highlight Banner */}
+        <div className="bg-gradient-to-r from-emerald-950/40 via-[#0e1626] to-blue-950/40 border border-emerald-500/30 rounded-3xl p-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-3xl shrink-0">
+              <i className="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2.5 py-0.5 rounded">100% Zero-Leak Guarantee</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white">Can Anyone Else See or Leak My Files?</h3>
+              <p className="text-gray-300 text-xs sm:text-sm mt-1 leading-relaxed max-w-2xl">
+                <strong className="text-emerald-300">No, never.</strong> Your files are <b>never uploaded</b> to our servers, Google, or any cloud company. Everything stays physically on your PC. All remote communication uses end-to-end TLS 1.3 direct encryption.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2 text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-5 py-3 rounded-xl">
+            <i className="fa-solid fa-lock"></i>
+            <span>Zero Third-Party Storage</span>
+          </div>
+        </div>
+
         <div className="text-center mb-12">
-          <span className="text-xs font-bold text-brand-400 uppercase tracking-widest block mb-2">ZERO-KNOWLEDGE ARCHITECTURE</span>
+          <span className="text-xs font-bold text-brand-400 uppercase tracking-widest block mb-2">BANK-GRADE SECURITY ARCHITECTURE</span>
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">
-            Your Data Stays on <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Your Computer. Period.</span>
+            How Your Data is <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400">Protected & Encrypted</span>
           </h2>
           <p className="text-gray-400 text-sm sm:text-base max-w-3xl mx-auto leading-relaxed">
-            Big-tech cloud storage providers scan your personal photos, files, and documents for targeted ads and AI models. Personal Cloud Pro operates on 100% private zero-knowledge infrastructure.
+            Standard cloud services scan your photos and documents. Personal Cloud Pro operates with true zero-knowledge privacy where you hold the only master keys.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {securityCards.map((card, idx) => (
-            <div key={idx} className="bg-[#0b0e18] border border-white/5 hover:border-blue-500/30 rounded-3xl p-6 transition-all hover:-translate-y-1 shadow-xl">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-blue-400 text-xl mb-4">
+            <div key={idx} className="bg-[#0b0e18] border border-white/5 hover:border-emerald-500/30 rounded-3xl p-6 transition-all hover:-translate-y-1 shadow-xl group">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400 text-xl mb-4 group-hover:scale-110 transition-transform">
                 <i className={`fa-solid ${card.icon}`}></i>
               </div>
               <h3 className="text-lg font-bold text-white mb-2">{card.title}</h3>
@@ -848,8 +1072,8 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                 <div
                   key={plan.id}
                   className={`rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all shadow-xl ${plan.popular
-                      ? "bg-gradient-to-b from-[#161e30] to-[#0c111c] border-2 border-blue-500/60 shadow-[0_0_40px_rgba(59,130,246,0.2)] md:-translate-y-2"
-                      : "bg-[#0c0f18] border border-white/10"
+                    ? "bg-gradient-to-b from-[#161e30] to-[#0c111c] border-2 border-blue-500/60 shadow-[0_0_40px_rgba(59,130,246,0.2)] md:-translate-y-2"
+                    : "bg-[#0c0f18] border border-white/10"
                     }`}
                 >
                   <div>
@@ -893,10 +1117,26 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                   </div>
 
                   <button
-                    onClick={() => (plan as any).isTrial ? (onOpenTrial && onOpenTrial()) : onBuyPro({ id: `personal-cloud-${plan.id}`, title: `Personal Cloud - ${plan.name}`, amount: plan.price })}
+                    onClick={() => {
+                      if ((plan as any).isTrial) {
+                        if (isTrialClaimed) {
+                          const a = document.createElement("a");
+                          a.href = "/downloads/PersonalCloud-Pro-Setup.exe";
+                          a.download = "PersonalCloud-Pro-Setup.exe";
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          onToast("Starting direct download for PersonalCloud-Pro-Setup.exe...", "success");
+                        } else if (onOpenTrial) {
+                          onOpenTrial();
+                        }
+                      } else {
+                        onBuyPro({ id: `personal-cloud-${plan.id}`, title: `Personal Cloud - ${plan.name}`, amount: plan.price });
+                      }
+                    }}
                     className={`w-full py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${plan.popular
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30"
-                        : "bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30"
+                      : "bg-white/10 hover:bg-white/20 text-white border border-white/10"
                       }`}
                   >
                     <span>{plan.cta}</span>
@@ -926,9 +1166,8 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
             return (
               <div
                 key={idx}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer ${
-                  isOpen ? "bg-[#111624] border-blue-500/50" : "bg-[#0b0e18] border-white/5 hover:border-white/20"
-                }`}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer ${isOpen ? "bg-[#111624] border-blue-500/50" : "bg-[#0b0e18] border-white/5 hover:border-white/20"
+                  }`}
                 onClick={() => setOpenFaq(isOpen ? null : idx)}
               >
                 <div className="flex justify-between items-center gap-4">

@@ -46,8 +46,29 @@ export default function RootLayout({
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Silence browser extension hydration error overlays in local dev
+              if (typeof window !== 'undefined') {
+                const _err = console.error;
+                console.error = (...args) => {
+                  if (
+                    typeof args[0] === 'string' &&
+                    (args[0].includes('bis_skin_checked') ||
+                      args[0].includes('ff-content.js') ||
+                      args[0].includes('cldmemdnllnccfahbcnjijheaolemfk'))
+                  ) {
+                    return;
+                  }
+                  _err(...args);
+                };
+              }
+            `,
+          }}
+        />
       </head>
-      <body className="font-sans min-h-full flex flex-col bg-[#0b0b10] text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white">
+      <body suppressHydrationWarning className="font-sans min-h-full flex flex-col bg-[#0b0b10] text-gray-300 antialiased selection:bg-brand-500/30 selection:text-white">
         <AuthProvider>
           {children}
           <FreeGiftClaimModal />

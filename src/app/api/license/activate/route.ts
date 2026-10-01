@@ -202,17 +202,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If user has an account with password verified, auto-provision active Pro license
-    if (!licenseData && password) {
-      licenseData = {
-        licenseKey: `PCLOUD-ACC-${cleanEmail.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`,
-        customerEmail: cleanEmail,
-        plan: "pro",
-        maxMachines: 3,
-        status: "active",
-      };
-      licenseDocId = licenseData.licenseKey;
-    }
 
     // Trial Expiration Enforcement (30-Day Free Trial)
     if (licenseData && (licenseData.isTrial || licenseData.plan === "trial")) {

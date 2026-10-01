@@ -96,8 +96,20 @@ export default function PersonalCloudPage() {
         {/* Personal Cloud Component View */}
         <PersonalCloudView
           currency={pricing.currency}
-          onOpenTrial={() => setIsTrialOpen(true)}
+          onOpenTrial={() => {
+            if (!currentUser) {
+              showToast("Please log in or sign up first to start your 30-day free trial.", "info");
+              router.push("/auth?redirect=/personal-cloud");
+              return;
+            }
+            setIsTrialOpen(true);
+          }}
           onBuyPro={(item) => {
+            if (!currentUser) {
+              showToast("Please log in or sign up first to purchase a Personal Cloud license.", "info");
+              router.push("/auth?redirect=/personal-cloud");
+              return;
+            }
             setCheckoutItem({
               id: item.id,
               title: item.title,

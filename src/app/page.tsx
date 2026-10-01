@@ -450,6 +450,11 @@ export default function Dashboard() {
             {!userProfile?.isPaid && !userProfile?.purchased?.["PRO_BUNDLE"] && userProfile?.role !== "admin" && userProfile?.role !== "sub-admin" && userProfile?.role !== "creator" ? (
               <button
                 onClick={() => {
+                  if (!currentUser) {
+                    showToast("Please log in or sign up first to get Pro Access.", "info");
+                    router.push("/auth?redirect=/");
+                    return;
+                  }
                   setCheckoutItem({
                     id: null,
                     title: "Pro Membership",
@@ -734,6 +739,11 @@ export default function Dashboard() {
                       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                         <button 
                           onClick={() => {
+                            if (!currentUser) {
+                              showToast("Please log in or sign up first to get Pro Access.", "info");
+                              router.push("/auth?redirect=/");
+                              return;
+                            }
                             setCheckoutItem({
                               id: null,
                               title: "Pro Membership",
@@ -758,8 +768,20 @@ export default function Dashboard() {
           {activeTab === "personal-cloud" && (
             <PersonalCloudView
               currency={pricing.currency}
-              onOpenTrial={() => setIsTrialOpen(true)}
+              onOpenTrial={() => {
+                if (!currentUser) {
+                  showToast("Please log in or sign up first to start your 30-day free trial.", "info");
+                  router.push("/auth?redirect=/");
+                  return;
+                }
+                setIsTrialOpen(true);
+              }}
               onBuyPro={(item) => {
+                if (!currentUser) {
+                  showToast("Please log in or sign up first to purchase a Personal Cloud license.", "info");
+                  router.push("/auth?redirect=/");
+                  return;
+                }
                 setCheckoutItem({
                   id: item.id,
                   title: item.title,
@@ -1061,6 +1083,11 @@ export default function Dashboard() {
         isOpen={isLimitModalOpen}
         onClose={() => setIsLimitModalOpen(false)}
         onUpgrade={() => {
+          if (!currentUser) {
+            showToast("Please log in or sign up first to upgrade to Pro.", "info");
+            router.push("/auth?redirect=/");
+            return;
+          }
           setCheckoutItem({
             id: null,
             title: "Pro Membership",

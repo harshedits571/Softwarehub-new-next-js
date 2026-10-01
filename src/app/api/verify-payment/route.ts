@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify the payment signature using HMAC SHA256
-    const secret = process.env.RAZORPAY_KEY_SECRET || "";
+    const secret = process.env.RAZORPAY_KEY_SECRET || "kAkQYdYDxrZZGifmZWfqdLeh";
     const generatedSignature = crypto
       .createHmac("sha256", secret)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
