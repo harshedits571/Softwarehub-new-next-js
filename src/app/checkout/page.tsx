@@ -186,10 +186,15 @@ function CheckoutPageInner() {
               }),
             });
 
-            const verifyData = await verifyRes.json();
+            let verifyData: any = null;
+            try {
+              verifyData = await verifyRes.json();
+            } catch (parseErr) {
+              console.error("Payment verification response parse error:", parseErr);
+            }
 
-            if (!verifyData.success) {
-              throw new Error("Payment verification failed. Please contact support.");
+            if (!verifyRes.ok || !verifyData?.success) {
+              throw new Error(verifyData?.error || "Payment verification failed. Please contact support.");
             }
 
             // 3. Update User purchases / pro state in Firestore

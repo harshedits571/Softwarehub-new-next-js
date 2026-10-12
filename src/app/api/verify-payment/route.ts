@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { adminFirestore } from "@/utils/firebase-admin";
-import { firestore } from "@/utils/firebase";
-import { doc, setDoc, getDoc, addDoc, collection, Timestamp } from "firebase/firestore";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -44,20 +43,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Signature is valid — perform server-side database updates
+    // Signature is valid — perform server-side database updates if adminFirestore is available
     const cleanEmail = (userEmail || "").trim().toLowerCase();
     const cleanUserId = userId || null;
 
-    // 1. If adminFirestore is initialized, update user & transaction on server
-    if (adminFirestore) {
-      if (cleanUserId) {
-        try {
-          const userDocRef = adminFirestore.collection("users").doc(cleanUserId);
-          const updateData: any = {
-            paymentId: razorpay_payment_id,
-            paidAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+    try {
+      const { adminFirestore } = await import("@/utils/firebase-admin");
+      if (adminFirestore) {
+        if (cleanUserId) {
+          try {
+            const userDocRef = adminFirestore.collection("users").doc(cleanUserId);
+            const updateData: any = {
+              paymentId: razorpay_payment_id,
+              paidAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
 
           if (isProMembership) {
             updateData.isPaid = true;
@@ -117,6 +117,9 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+  } catch (adminErr) {
+    console.warn("Server Firestore admin update skipped or unavailable:", adminErr);
+  }
 
     return NextResponse.json({
       success: true,

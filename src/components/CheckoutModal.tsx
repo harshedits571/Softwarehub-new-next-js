@@ -376,9 +376,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 }),
               });
 
-              const verifyData = await verifyRes.json();
-              if (!verifyData.success) {
-                throw new Error(verifyData.error || "Payment verification failed");
+              let verifyData: any = null;
+              try {
+                verifyData = await verifyRes.json();
+              } catch (parseErr) {
+                console.error("Payment verification response parse error:", parseErr);
+              }
+
+              if (!verifyRes.ok || !verifyData?.success) {
+                throw new Error(verifyData?.error || `Payment verification failed (Server HTTP ${verifyRes.status}). Please contact support.`);
               }
 
               const paymentId = response.razorpay_payment_id;
