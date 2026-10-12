@@ -1,4 +1,4 @@
-﻿rules_version = '2';
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -184,11 +184,10 @@ service cloud.firestore {
 
     // 16. Licensing
     match /licenses/{licenseKey} {
-      allow get: if true; // Windows desktop client checks license validity
-      allow list: if isAdmin() || isSubAdmin();
+      allow read: if true; // Windows desktop client checks license validity & queries by email
       allow create: if true;
-      allow update, delete: if isAdmin() || isSubAdmin() || 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devices', 'activatedMachines', 'boundMachines', 'lastActiveAt', 'lastUsed']));
+      allow update: if true; // Supports gift claim, trial activation, and machine binding
+      allow delete: if isAdmin() || isSubAdmin();
     }
 
     // 17. Custom Links (Influencers / Affiliates / Campaigns)
