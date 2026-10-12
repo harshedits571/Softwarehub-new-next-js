@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { firestore } from "@/utils/firebase";
-import { doc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, onSnapshot } from "firebase/firestore";
 
 interface GiftGrant {
   key: string;
@@ -19,12 +19,37 @@ export function FreeGiftClaimModal() {
   const [grant, setGrant] = useState<GiftGrant | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [downloadConfig, setDownloadConfig] = useState<{ downloadUrl: string; fileName: string }>({
+    downloadUrl: "/downloads/PersonalCloud-Pro-Setup.exe",
+    fileName: "PersonalCloud-Pro-Setup.exe",
+  });
   const [claimedData, setClaimedData] = useState<{
     key: string;
     email: string;
     password?: string;
     plan: string;
   } | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(firestore, "config", "personal_cloud_updates"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.downloadUrl) {
+            setDownloadConfig({
+              downloadUrl: data.downloadUrl,
+              fileName: data.fileName || "PersonalCloud-Pro-Setup.exe",
+            });
+          }
+        }
+      },
+      (err) => {
+        console.warn("Could not fetch gift download config:", err);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // Form fields
   const [name, setName] = useState("");
@@ -341,8 +366,8 @@ export function FreeGiftClaimModal() {
 
             <div className="flex flex-col gap-3">
               <a
-                href="/downloads/PersonalCloud-Pro-Setup.exe"
-                download
+                href={downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                download={downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}
                 className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-bold text-sm py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-download"></i>

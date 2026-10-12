@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { auth, firestore } from "../utils/firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, Timestamp } from "firebase/firestore";
 
 interface TrialModalProps {
   isOpen: boolean;
@@ -26,12 +26,37 @@ export const TrialModal: React.FC<TrialModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [downloadConfig, setDownloadConfig] = useState<{ downloadUrl: string; fileName: string }>({
+    downloadUrl: "/downloads/PersonalCloud-Pro-Setup.exe",
+    fileName: "PersonalCloud-Pro-Setup.exe",
+  });
   const [activatedTrial, setActivatedTrial] = useState<{
     key: string;
     email: string;
     password?: string;
     trialEndDate: string;
   } | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(firestore, "config", "personal_cloud_updates"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.downloadUrl) {
+            setDownloadConfig({
+              downloadUrl: data.downloadUrl,
+              fileName: data.fileName || "PersonalCloud-Pro-Setup.exe",
+            });
+          }
+        }
+      },
+      (err) => {
+        console.warn("Could not fetch trial download config:", err);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -219,8 +244,8 @@ export const TrialModal: React.FC<TrialModalProps> = ({
             </p>
             <div className="flex flex-col gap-3">
               <a
-                href="/downloads/PersonalCloud-Pro-Setup.exe"
-                download
+                href={downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                download={downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-download"></i>
@@ -258,8 +283,8 @@ export const TrialModal: React.FC<TrialModalProps> = ({
                 <span>Upgrade to Lifetime Pro Access</span>
               </button>
               <a
-                href="/downloads/PersonalCloud-Pro-Setup.exe"
-                download
+                href={downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                download={downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}
                 className="w-full bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-download"></i>
@@ -398,8 +423,8 @@ export const TrialModal: React.FC<TrialModalProps> = ({
 
             <div className="flex flex-col gap-3">
               <a
-                href="/downloads/PersonalCloud-Pro-Setup.exe"
-                download
+                href={downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe"}
+                download={downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}
                 className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-bold text-sm py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
               >
                 <i className="fa-solid fa-download"></i>

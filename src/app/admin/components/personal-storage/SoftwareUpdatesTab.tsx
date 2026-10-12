@@ -30,11 +30,11 @@ export interface SoftwareUpdateConfig {
 
 const DEFAULT_CONFIG: SoftwareUpdateConfig = {
   currentVersion: "1.0.4",
-  downloadUrl: "https://softwarehubs.in/downloads/PersonalCloud_Setup_v1.0.4.exe",
-  fileName: "PersonalCloud_Setup_v1.0.4.exe",
-  fileSizeMB: 48.2,
+  downloadUrl: "https://softwarehubs.in/downloads/PersonalCloud-Pro-Setup.exe",
+  fileName: "PersonalCloud-Pro-Setup.exe",
+  fileSizeMB: 48.5,
   releaseDate: new Date().toISOString().slice(0, 10),
-  releaseNotes: "• Initial public release\n• Local PC storage synchronization\n• Real-time file indexing\n• Automatic LAN and WAN remote access",
+  releaseNotes: "• Performance improvements and faster background sync\n• Seamless Firestore app password verification\n• Automatic update detection\n• Remote access connection stability",
   mandatory: false,
   totalDownloads: 142,
   history: [
@@ -59,6 +59,15 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
+
+  // Editable direct URL fields
+  const [editUrl, setEditUrl] = useState(DEFAULT_CONFIG.downloadUrl);
+  const [editFileName, setEditFileName] = useState(DEFAULT_CONFIG.fileName);
+  const [editFileSize, setEditFileSize] = useState(DEFAULT_CONFIG.fileSizeMB);
+  const [editVersion, setEditVersion] = useState(DEFAULT_CONFIG.currentVersion);
+  const [editNotes, setEditNotes] = useState(DEFAULT_CONFIG.releaseNotes);
+  const [editMandatory, setEditMandatory] = useState(DEFAULT_CONFIG.mandatory);
 
   // New release modal / drawer
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -75,7 +84,14 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
       try {
         const snap = await getDoc(doc(db, "config", "personal_cloud_updates"));
         if (snap.exists()) {
-          setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
+          const data = { ...DEFAULT_CONFIG, ...snap.data() };
+          setConfig(data);
+          setEditUrl(data.downloadUrl || DEFAULT_CONFIG.downloadUrl);
+          setEditFileName(data.fileName || DEFAULT_CONFIG.fileName);
+          setEditFileSize(data.fileSizeMB || DEFAULT_CONFIG.fileSizeMB);
+          setEditVersion(data.currentVersion || DEFAULT_CONFIG.currentVersion);
+          setEditNotes(data.releaseNotes || DEFAULT_CONFIG.releaseNotes);
+          setEditMandatory(Boolean(data.mandatory));
         }
       } catch (err) {
         console.error("Error fetching updates config:", err);
@@ -87,14 +103,46 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
   }, []);
 
   const copyDownloadLink = () => {
-    navigator.clipboard.writeText(config.downloadUrl);
+    navigator.clipboard.writeText(editUrl || config.downloadUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
+  const handleQuickSaveUrl = async () => {
+    if (!editUrl.trim()) {
+      alert("Direct Download URL cannot be empty.");
+      return;
+    }
+
+    setSaving(true);
+    setSaveSuccessMsg("");
+    try {
+      const updatedConfig: SoftwareUpdateConfig = {
+        ...config,
+        downloadUrl: editUrl.trim(),
+        fileName: editFileName.trim() || config.fileName || "PersonalCloud-Pro-Setup.exe",
+        fileSizeMB: Number(editFileSize) || config.fileSizeMB || 48.5,
+        currentVersion: editVersion.trim().replace(/^v/, "") || config.currentVersion || "1.0.4",
+        releaseNotes: editNotes.trim() || config.releaseNotes || "",
+        mandatory: editMandatory,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, "config", "personal_cloud_updates"), updatedConfig, { merge: true });
+      setConfig(updatedConfig);
+      setSaveSuccessMsg("Direct Download URL and settings saved successfully to live database!");
+      if (onRefresh) onRefresh();
+      setTimeout(() => setSaveSuccessMsg(""), 4000);
+    } catch (err: any) {
+      alert("Error saving download URL: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openPublishModal = () => {
     setNewVersion("");
-    setNewUrl("");
+    setNewUrl(editUrl || config.downloadUrl);
     setNewFileName("");
     setNewFileSize(config.fileSizeMB || 48.5);
     setNewNotes("• Performance improvements\n• Bug fixes and stability enhancements");
@@ -140,6 +188,12 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
 
       await setDoc(doc(db, "config", "personal_cloud_updates"), newConfig, { merge: true });
       setConfig(newConfig);
+      setEditUrl(newConfig.downloadUrl);
+      setEditFileName(newConfig.fileName);
+      setEditFileSize(newConfig.fileSizeMB);
+      setEditVersion(newConfig.currentVersion);
+      setEditNotes(newConfig.releaseNotes);
+      setEditMandatory(newConfig.mandatory);
       setShowPublishModal(false);
       if (onRefresh) onRefresh();
       alert(`Release v${newConfig.currentVersion} published successfully!`);
@@ -191,6 +245,12 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
 
       await setDoc(doc(db, "config", "personal_cloud_updates"), rollbackConfig, { merge: true });
       setConfig(rollbackConfig);
+      setEditUrl(rollbackConfig.downloadUrl);
+      setEditFileName(rollbackConfig.fileName);
+      setEditFileSize(rollbackConfig.fileSizeMB);
+      setEditVersion(rollbackConfig.currentVersion);
+      setEditNotes(rollbackConfig.releaseNotes);
+      setEditMandatory(rollbackConfig.mandatory);
       if (onRefresh) onRefresh();
       alert(`Successfully rolled back to v${histItem.version}!`);
     } catch (err: any) {
@@ -221,7 +281,7 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
               Personal Cloud for Windows (Desktop Client)
             </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-xl">
-              Manage the download URL that customers receive upon purchase and auto-updater endpoint for Windows desktop clients.
+              Directly edit and update the live direct download URL, installer settings, or publish full version upgrades for all customers.
             </p>
           </div>
 
@@ -234,11 +294,145 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
           </button>
         </div>
 
+        {/* Live Editable Direct Download URL & Installer Configuration */}
+        <div className="mt-6 pt-6 border-t border-white/10 relative z-10 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <i className="fa-solid fa-link text-cyan-400"></i>
+              Direct Download URL & Live Installer Settings
+            </h3>
+            {saveSuccessMsg && (
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-pulse">
+                <i className="fa-solid fa-check"></i> {saveSuccessMsg}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Direct Download URL Input */}
+            <div className="md:col-span-8 bg-[#0a0d14]/70 p-4 rounded-xl border border-white/10 flex flex-col justify-between gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <i className="fa-solid fa-cloud-arrow-down text-cyan-400"></i>
+                    Direct Download URL (Immediate Live Link)
+                  </span>
+                  <span className="text-[10px] text-cyan-400 font-normal">Can be full URL or local path</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                    placeholder="https://softwarehubs.in/downloads/PersonalCloud-Pro-Setup.exe"
+                    className="w-full bg-black/60 text-cyan-300 font-mono text-xs px-3 py-2.5 rounded-lg border border-cyan-500/30 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyDownloadLink}
+                    className={`px-3 py-2.5 rounded-lg font-medium text-xs border transition flex items-center gap-1.5 whitespace-nowrap ${
+                      copiedUrl
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                        : "bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="Copy URL"
+                  >
+                    <i className={`fa-solid ${copiedUrl ? "fa-check" : "fa-copy"}`}></i>
+                    <span>{copiedUrl ? "Copied" : "Copy"}</span>
+                  </button>
+                  {editUrl && (
+                    <a
+                      href={editUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-medium text-xs border border-white/10 transition flex items-center gap-1.5 whitespace-nowrap"
+                      title="Test / Download Link"
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                      <span>Test</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                💡 Changing this URL immediately updates all download buttons across the storefront, trial claim modal, checkout confirmation, and user dashboard in real time.
+              </p>
+            </div>
+
+            {/* Quick Properties (Filename, Size, Version) */}
+            <div className="md:col-span-4 bg-[#0a0d14]/70 p-4 rounded-xl border border-white/10 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
+                    Version
+                  </label>
+                  <input
+                    type="text"
+                    value={editVersion}
+                    onChange={(e) => setEditVersion(e.target.value)}
+                    placeholder="1.0.4"
+                    className="w-full bg-black/60 text-white font-mono text-xs px-2.5 py-1.5 rounded-lg border border-white/10 focus:border-cyan-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
+                    Size (MB)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editFileSize}
+                    onChange={(e) => setEditFileSize(Number(e.target.value))}
+                    className="w-full bg-black/60 text-white font-mono text-xs px-2.5 py-1.5 rounded-lg border border-white/10 focus:border-cyan-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
+                  Installer File Name
+                </label>
+                <input
+                  type="text"
+                  value={editFileName}
+                  onChange={(e) => setEditFileName(e.target.value)}
+                  placeholder="PersonalCloud-Pro-Setup.exe"
+                  className="w-full bg-black/60 text-white font-mono text-xs px-2.5 py-1.5 rounded-lg border border-white/10 focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Save Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="editMandatoryCheck"
+                checked={editMandatory}
+                onChange={(e) => setEditMandatory(e.target.checked)}
+                className="w-4 h-4 rounded bg-[#0a0d14] border-white/20 text-cyan-500 focus:ring-0 cursor-pointer"
+              />
+              <label htmlFor="editMandatoryCheck" className="text-xs text-slate-300 font-medium cursor-pointer">
+                Mark this release as mandatory (forces auto-update on desktop launch)
+              </label>
+            </div>
+
+            <button
+              onClick={handleQuickSaveUrl}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition disabled:opacity-50"
+            >
+              <i className={`fa-solid ${saving ? "fa-spinner fa-spin" : "fa-floppy-disk"}`}></i>
+              <span>{saving ? "Saving Changes..." : "Save Download URL & Settings"}</span>
+            </button>
+          </div>
+        </div>
+
         {/* Current Release Details Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/5 relative z-10">
           <div className="bg-[#0a0d14]/60 p-3.5 rounded-xl border border-white/5">
             <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
-              Installer File
+              Active Installer File
             </span>
             <div className="font-mono text-xs font-semibold text-white truncate" title={config.fileName}>
               {config.fileName}
@@ -266,7 +460,7 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
 
           <div className="bg-[#0a0d14]/60 p-3.5 rounded-xl border border-white/5 flex flex-col justify-between">
             <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
-              Direct Download URL
+              Live Database Download Link
             </span>
             <div className="flex items-center gap-2">
               <input
@@ -290,12 +484,18 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
 
         {/* Release Notes */}
         <div className="mt-4 pt-4 border-t border-white/5">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block mb-1">
-            Current Release Notes
-          </span>
-          <pre className="text-xs text-slate-300 font-sans whitespace-pre-line bg-[#0a0d14]/40 p-3 rounded-lg border border-white/5">
-            {config.releaseNotes}
-          </pre>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+              Release Notes / Changelog
+            </span>
+          </div>
+          <textarea
+            rows={3}
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            placeholder="Release notes..."
+            className="w-full text-xs text-slate-300 font-mono bg-[#0a0d14]/60 p-3 rounded-lg border border-white/10 focus:border-cyan-400 focus:outline-none"
+          ></textarea>
         </div>
       </div>
 
@@ -441,9 +641,9 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
                   Direct Download Link (URL) <span className="text-rose-400">*</span>
                 </label>
                 <input
-                  type="url"
+                  type="text"
                   required
-                  placeholder="https://drive.google.com/... or https://your-server.com/setup.exe"
+                  placeholder="https://softwarehubs.in/downloads/PersonalCloud-Pro-Setup.exe"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
                   className="w-full bg-[#0a0d14] text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -454,7 +654,7 @@ export default function SoftwareUpdatesTab({ onRefresh }: SoftwareUpdatesTabProp
                 <label className="block text-slate-300 font-semibold mb-1">Installer File Name</label>
                 <input
                   type="text"
-                  placeholder="PersonalCloud_Setup_v1.0.5.exe"
+                  placeholder="PersonalCloud-Pro-Setup.exe"
                   value={newFileName}
                   onChange={(e) => setNewFileName(e.target.value)}
                   className="w-full bg-[#0a0d14] text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"

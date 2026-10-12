@@ -45,6 +45,10 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
   const [pricingConfig, setPricingConfig] = useState<Record<string, any> | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [downloadConfig, setDownloadConfig] = useState<{ downloadUrl: string; fileName: string }>({
+    downloadUrl: "/downloads/PersonalCloud-Pro-Setup.exe",
+    fileName: "PersonalCloud-Pro-Setup.exe",
+  });
 
   // Real-time auth & user profile sync
   useEffect(() => {
@@ -77,6 +81,28 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
       },
       (err) => {
         console.warn("Could not fetch real-time pricing config:", err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Live real-time sync with Admin Direct Download URL Management
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(firestore, "config", "personal_cloud_updates"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.downloadUrl) {
+            setDownloadConfig({
+              downloadUrl: data.downloadUrl,
+              fileName: data.fileName || "PersonalCloud-Pro-Setup.exe",
+            });
+          }
+        }
+      },
+      (err) => {
+        console.warn("Could not fetch real-time software update config:", err);
       }
     );
     return () => unsub();
@@ -341,10 +367,10 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
   };
 
   const handleDownload = () => {
-    onToast("Starting direct download for PersonalCloud-Pro-Setup.exe...", "info");
+    onToast(`Starting direct download for ${downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}...`, "info");
     const a = document.createElement("a");
-    a.href = "/downloads/PersonalCloud-Pro-Setup.exe";
-    a.download = "PersonalCloud-Pro-Setup.exe";
+    a.href = downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe";
+    a.download = downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -389,12 +415,12 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
               <button
                 onClick={() => {
                   const a = document.createElement("a");
-                  a.href = "/downloads/PersonalCloud-Pro-Setup.exe";
-                  a.download = "PersonalCloud-Pro-Setup.exe";
+                  a.href = downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe";
+                  a.download = downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe";
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
-                  onToast("Starting direct download for PersonalCloud-Pro-Setup.exe...", "success");
+                  onToast(`Starting direct download for ${downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}...`, "success");
                 }}
                 className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-black px-8 py-4 rounded-xl transition-all shadow-[0_0_35px_rgba(16,185,129,0.4)] hover:shadow-[0_0_45px_rgba(16,185,129,0.6)] active:scale-95 flex items-center justify-center gap-3 text-sm md:text-base border border-emerald-400/30"
               >
@@ -1121,12 +1147,12 @@ export const PersonalCloudView: React.FC<PersonalCloudViewProps> = ({
                       if ((plan as any).isTrial) {
                         if (isTrialClaimed) {
                           const a = document.createElement("a");
-                          a.href = "/downloads/PersonalCloud-Pro-Setup.exe";
-                          a.download = "PersonalCloud-Pro-Setup.exe";
+                          a.href = downloadConfig.downloadUrl || "/downloads/PersonalCloud-Pro-Setup.exe";
+                          a.download = downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe";
                           document.body.appendChild(a);
                           a.click();
                           document.body.removeChild(a);
-                          onToast("Starting direct download for PersonalCloud-Pro-Setup.exe...", "success");
+                          onToast(`Starting direct download for ${downloadConfig.fileName || "PersonalCloud-Pro-Setup.exe"}...`, "success");
                         } else if (onOpenTrial) {
                           onOpenTrial();
                         }
